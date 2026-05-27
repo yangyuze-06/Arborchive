@@ -18,6 +18,7 @@ CASES=(
   "unit-tests/p5/semantic_gaps_case"
   "unit-tests/p6/lambda_case"
   "unit-tests/p7/attribute_presence_case"
+  "unit-tests/p7/attribute_arguments_case"
 )
 
 if [[ -z "${LLVM_CONFIG:-}" ]]; then

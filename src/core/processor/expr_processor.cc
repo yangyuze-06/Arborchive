@@ -336,6 +336,18 @@ void ExprProcessor::processStringLiteral(const StringLiteral *literal) {
 }
 
 void ExprProcessor::processIntegerLiteral(const IntegerLiteral *literal) {
+  processAttributeIntegerLiteral(literal);
+}
+
+int ExprProcessor::processAttributeIntegerLiteral(
+    const IntegerLiteral *literal) {
+  if (!literal)
+    return -1;
+
+  KeyType exprKey = KeyGen::Expr_::makeKey(literal, ast_context_);
+  if (auto cachedId = SEARCH_EXPR_CACHE(exprKey))
+    return *cachedId;
+
   int exprId =
       processBaseExpr(const_cast<IntegerLiteral *>(literal), ExprKind::LITERAL);
 
@@ -343,6 +355,7 @@ void ExprProcessor::processIntegerLiteral(const IntegerLiteral *literal) {
   std::string text = value;
 
   processLiteralValue(value, text, exprId);
+  return exprId;
 }
 
 void ExprProcessor::processFloatingLiteral(const FloatingLiteral *literal) {

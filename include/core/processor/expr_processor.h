@@ -24,6 +24,7 @@ public:
 
   void processStringLiteral(const StringLiteral *literal);
   void processIntegerLiteral(const IntegerLiteral *literal);
+  int processAttributeIntegerLiteral(const IntegerLiteral *literal);
   void processFloatingLiteral(const FloatingLiteral *literal);
   void processCharacterLiteral(const CharacterLiteral *literal);
   void processBoolLiteral(const CXXBoolLiteralExpr *literal);

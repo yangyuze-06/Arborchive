@@ -176,6 +176,12 @@ inline auto initStorage(const std::string &path) {
       SpecifierTableFn::varspecifiers(),
       // Attribute Tables
       AttributeTableFn::attributes(),
+      AttributeTableFn::attribute_args(),
+      AttributeTableFn::attribute_arg_value(),
+      AttributeTableFn::attribute_arg_type(),
+      AttributeTableFn::attribute_arg_constant(),
+      AttributeTableFn::attribute_arg_expr(),
+      AttributeTableFn::attribute_arg_name(),
       AttributeTableFn::typeattributes(),
       AttributeTableFn::funcattributes(),
       AttributeTableFn::varattributes(),
