@@ -52,6 +52,7 @@ void ASTVisitor::initProcessors() {
   type_processor_ = std::make_unique<TypeProcessor>(context_, pp_);
   stmt_processor_ = std::make_unique<StmtProcessor>(context_, pp_);
   expr_processor_ = std::make_unique<ExprProcessor>(context_, pp_, type_processor_.get());
+  attribute_processor_ = std::make_unique<AttributeProcessor>(context_, pp_);
   specifier_processor_ = std::make_unique<SpecifierProcessor>(context_, pp_);
   template_processor_ = std::make_unique<TemplateProcessor>(
       context_, pp_, type_processor_.get(), expr_processor_.get(),
@@ -73,6 +74,7 @@ bool ASTVisitor::VisitFunctionDecl(clang::FunctionDecl *decl) {
   // Process function specifiers
   if (func_id != -1)
     specifier_processor_->processFunctionSpecifiers(func_id, decl);
+  attribute_processor_->processFunctionAttributes(func_id, decl);
 
   // Process return type with qualifiers
   int return_type_id =

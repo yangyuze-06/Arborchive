@@ -1,6 +1,7 @@
 #ifndef _AST_VISITOR_H_
 #define _AST_VISITOR_H_
 
+#include "core/processor/attribute_processor.h"
 #include "core/processor/expr_processor.h"
 #include "core/processor/inheritance_processor.h"
 #include "core/processor/lambda_processor.h"
@@ -36,6 +37,7 @@ private:
   std::unique_ptr<TypeProcessor> type_processor_ = nullptr;
   std::unique_ptr<StmtProcessor> stmt_processor_ = nullptr;
   std::unique_ptr<ExprProcessor> expr_processor_ = nullptr;
+  std::unique_ptr<AttributeProcessor> attribute_processor_ = nullptr;
   std::unique_ptr<SpecifierProcessor> specifier_processor_ = nullptr;
   std::unique_ptr<TemplateProcessor> template_processor_ = nullptr;
   std::unique_ptr<InheritanceProcessor> inheritance_processor_ = nullptr;
