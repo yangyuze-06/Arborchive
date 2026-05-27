@@ -3,6 +3,7 @@
 
 #include "db/table_defs/class.h"
 #include "db/table_defs/variable.h"
+#include "table_defs/attribute.h"
 #include "table_defs/compilation.h"
 #include "table_defs/concept.h"
 #include "table_defs/container.h"
@@ -173,6 +174,12 @@ inline auto initStorage(const std::string &path) {
       SpecifierTableFn::typespecifiers(),
       SpecifierTableFn::funspecifiers(),
       SpecifierTableFn::varspecifiers(),
+      // Attribute Tables
+      AttributeTableFn::attributes(),
+      AttributeTableFn::typeattributes(),
+      AttributeTableFn::funcattributes(),
+      AttributeTableFn::varattributes(),
+      AttributeTableFn::stmtattributes(),
       // Preprocessor Tables
       PreprocessorTableFn::preprocdirects(),
       PreprocessorTableFn::preprocpair(),
