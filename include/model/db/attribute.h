@@ -11,6 +11,15 @@ enum class AttributeKind {
   ALIGNAS = 4,
 };
 
+enum class AttributeArgKind {
+  EMPTY = 0,
+  TOKEN = 1,
+  CONSTANT = 2,
+  TYPE = 3,
+  CONSTANT_EXPR = 4,
+  EXPR = 5,
+};
+
 namespace DbModel {
 
 struct Attribute {
@@ -19,6 +28,39 @@ struct Attribute {
   std::string name;
   std::string name_space;
   int location;
+};
+
+struct AttributeArg {
+  int id;
+  int kind;
+  int attribute;
+  int index;
+  int location;
+};
+
+struct AttributeArgValue {
+  int arg;
+  std::string value;
+};
+
+struct AttributeArgType {
+  int arg;
+  int type_id;
+};
+
+struct AttributeArgConstant {
+  int arg;
+  int constant;
+};
+
+struct AttributeArgExpr {
+  int arg;
+  int expr;
+};
+
+struct AttributeArgName {
+  int arg;
+  std::string name;
 };
 
 struct TypeAttribute {

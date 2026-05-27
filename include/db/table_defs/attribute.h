@@ -19,6 +19,51 @@ inline auto attributes() {
       make_column("location", &DbModel::Attribute::location));
 }
 
+inline auto attribute_args() {
+  return make_table(
+      "attribute_args",
+      make_column("id", &DbModel::AttributeArg::id, primary_key()),
+      make_column("kind", &DbModel::AttributeArg::kind),
+      make_column("attribute", &DbModel::AttributeArg::attribute),
+      make_column("index", &DbModel::AttributeArg::index),
+      make_column("location", &DbModel::AttributeArg::location));
+}
+
+inline auto attribute_arg_value() {
+  return make_table(
+      "attribute_arg_value",
+      make_column("arg", &DbModel::AttributeArgValue::arg, primary_key()),
+      make_column("value", &DbModel::AttributeArgValue::value));
+}
+
+inline auto attribute_arg_type() {
+  return make_table(
+      "attribute_arg_type",
+      make_column("arg", &DbModel::AttributeArgType::arg, primary_key()),
+      make_column("type_id", &DbModel::AttributeArgType::type_id));
+}
+
+inline auto attribute_arg_constant() {
+  return make_table(
+      "attribute_arg_constant",
+      make_column("arg", &DbModel::AttributeArgConstant::arg, primary_key()),
+      make_column("constant", &DbModel::AttributeArgConstant::constant));
+}
+
+inline auto attribute_arg_expr() {
+  return make_table(
+      "attribute_arg_expr",
+      make_column("arg", &DbModel::AttributeArgExpr::arg, primary_key()),
+      make_column("expr", &DbModel::AttributeArgExpr::expr));
+}
+
+inline auto attribute_arg_name() {
+  return make_table(
+      "attribute_arg_name",
+      make_column("arg", &DbModel::AttributeArgName::arg, primary_key()),
+      make_column("name", &DbModel::AttributeArgName::name));
+}
+
 inline auto typeattributes() {
   return make_table(
       "typeattributes",

@@ -9,6 +9,12 @@ template void StorageFacade::insertClassObj<DbModel::ArborLayoutProvenance&>(DbM
 template void StorageFacade::insertClassObj<DbModel::ArborRecordLayoutTrait&>(DbModel::ArborRecordLayoutTrait&);
 template void StorageFacade::insertClassObj<DbModel::ArraySizes&>(DbModel::ArraySizes&);
 template void StorageFacade::insertClassObj<DbModel::Attribute&>(DbModel::Attribute&);
+template void StorageFacade::insertClassObj<DbModel::AttributeArg&>(DbModel::AttributeArg&);
+template void StorageFacade::insertClassObj<DbModel::AttributeArgConstant&>(DbModel::AttributeArgConstant&);
+template void StorageFacade::insertClassObj<DbModel::AttributeArgExpr&>(DbModel::AttributeArgExpr&);
+template void StorageFacade::insertClassObj<DbModel::AttributeArgName&>(DbModel::AttributeArgName&);
+template void StorageFacade::insertClassObj<DbModel::AttributeArgType&>(DbModel::AttributeArgType&);
+template void StorageFacade::insertClassObj<DbModel::AttributeArgValue&>(DbModel::AttributeArgValue&);
 template void StorageFacade::insertClassObj<DbModel::BitField&>(DbModel::BitField&);
 template void StorageFacade::insertClassObj<DbModel::BuiltinType_&>(DbModel::BuiltinType_&);
 template void StorageFacade::insertClassObj<DbModel::ClassInstantiation&>(DbModel::ClassInstantiation&);

@@ -52,7 +52,8 @@ void ASTVisitor::initProcessors() {
   type_processor_ = std::make_unique<TypeProcessor>(context_, pp_);
   stmt_processor_ = std::make_unique<StmtProcessor>(context_, pp_);
   expr_processor_ = std::make_unique<ExprProcessor>(context_, pp_, type_processor_.get());
-  attribute_processor_ = std::make_unique<AttributeProcessor>(context_, pp_);
+  attribute_processor_ =
+      std::make_unique<AttributeProcessor>(context_, pp_, expr_processor_.get());
   specifier_processor_ = std::make_unique<SpecifierProcessor>(context_, pp_);
   template_processor_ = std::make_unique<TemplateProcessor>(
       context_, pp_, type_processor_.get(), expr_processor_.get(),
