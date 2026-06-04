@@ -64,6 +64,8 @@ void ASTVisitor::initProcessors() {
       context_, pp_, type_processor_.get(), variable_processor_.get());
   lambda_processor_ = std::make_unique<Lambda_Processor>(
       context_, pp_, type_processor_.get(), variable_processor_.get());
+  initialization_processor_ =
+      std::make_unique<InitializationProcessor>(context_, pp_);
 }
 
 // 实现各种Visit方法
@@ -137,6 +139,7 @@ bool ASTVisitor::VisitVarDecl(clang::VarDecl *decl) {
   template_processor_->processVarTemplateSpecialization(
       llvm::dyn_cast_or_null<clang::VarTemplateSpecializationDecl>(decl),
       var_decl_id);
+  initialization_processor_->processVarDeclInitializer(decl);
   return true;
 }
 
