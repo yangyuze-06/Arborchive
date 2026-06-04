@@ -30,7 +30,7 @@ Implemented safe subsets:
   - `[[fallthrough]]` linked to the inner `NullStmt` / `StmtKind::EMPTY`
   - `[[likely]]` linked to the inner `ReturnStmt` / `StmtKind::RETURN`
 
-Deferred scope:
+Deferred scope at the time of this owner-link note:
 
 - P7f remains deferred.
 - `attribute_arg_type` is not populated.
@@ -39,6 +39,10 @@ Deferred scope:
 - Generalized `CONSTANT_EXPR` is not implemented.
 - Dependent/template attribute arguments are not implemented.
 - Arbitrary attribute argument string dumping is not implemented.
+
+Later P7f safe-subset work may add narrow argument payloads while keeping P7
+overall `PARTIAL`. See `docs/analysis/p7_remaining_attribute_scope_audit.md`
+for current P7f status.
 
 ## Architecture Boundary
 
