@@ -8,9 +8,12 @@ safe subset, but it is not a complete Attribute System.
 Implemented enough to keep:
 
 - Function attribute presence and `funcattributes`.
-- `DeprecatedAttr` message/replacement strings as `attribute_arg_value`.
-- Direct integer-literal `AlignedAttr` expression arguments as
-  `attribute_arg_constant`.
+- Stable whitelisted strings as `attribute_arg_value`:
+  - `DeprecatedAttr` message/replacement strings.
+  - `AnnotateAttr` annotation strings.
+  - `SectionAttr` section names.
+- Direct and shallow wrapped integer-literal `AlignedAttr` expression arguments
+  as `attribute_arg_constant`.
 - Conservative owner links for stable type, variable, and statement owners.
 - Canonical `ParmVarDecl` variable entity id reuse for parameter declarations,
   parameter attributes, and `DeclRefExpr` references.
@@ -22,12 +25,14 @@ Not implemented and not safe to mark DONE:
 - `attribute_arg_name`.
 - Generalized `CONSTANT_EXPR` beyond the direct integer-literal safe subset.
 - Dependent/template attribute arguments.
+- Availability named fields and versions.
+- Alias strings on the current Darwin validation target.
 - Broad Clang `Attr` argument modeling.
 
-Recommended next implementation task: P7f-1, a narrow
-`attribute_arg_value` expansion for additional stable string payloads only.
-Do not start expression, type, or name argument extraction until the risk items
-below are resolved.
+Recommended next implementation task: continue P7f-1 only if a target-supported
+stable string payload can be validated with a focused fixture. Do not start
+expression, type, or name argument extraction until the risk items below are
+resolved.
 
 ## 2. Current P7 Status Summary
 
@@ -41,8 +46,8 @@ Current ownership shape:
   `AttributeProcessor`.
 - `AttributeProcessor` owns attribute row creation, owner-link rows, supported
   argument classification, and typed payload insertion.
-- `ExprProcessor` is used only for direct integer literal expression rows used
-  by `attribute_arg_constant`.
+- `ExprProcessor` is used only for direct or shallow wrapped integer literal
+  expression rows used by `attribute_arg_constant`.
 - `TypeProcessor`, `VariableProcessor`, and `StmtProcessor` provide stable owner
   ids for the implemented owner-link safe subset.
 
@@ -58,9 +63,9 @@ P7f work should not add argument-specific branching to `ASTVisitor`.
 | `typeattributes` | Present. | Populated for records, enums, typedefs, and type aliases after type id resolution. | Stable `@type`/`@usertype` owner ids for record/enum/alias declarations. | `attribute_owner_links_case.cc`. | Accurate. | Unsupported type-like attrs and attributed type spellings remain unmodeled. | SAFE SUBSET DONE |
 | `varattributes` | Present. | Populated for fields, globals, locals, and parameters using unified variable entity ids. | `@membervariable`, `@globalvariable`, `@localvariable`, `@parameter`. | `attribute_owner_links_case.cc`; SQLite duplicate-param query. | Accurate and documents ParmVarDecl fix. | Add explicit regression tests for canonical parameter id reuse and no duplicate `params` rows. | SAFE SUBSET DONE |
 | `stmtattributes` | Present. | Populated for conservative `AttributedStmt` inner owners returned by `StmtProcessor`. | `[[fallthrough]]` to inner `NullStmt`; `[[likely]]` to inner `ReturnStmt`; more inner stmt kinds supported by helper but not all tested. | `attribute_owner_links_case.cc`. | Accurate. | Add unsupported-wrapper skip regression; decide whether wrapper-vs-inner semantics match CodeQL extractor expectations. | CONSERVATIVE PARTIAL |
-| `attribute_args` | Present. | Populated only for supported P7b args. | `DeprecatedAttr` string args and direct literal `AlignedAttr`. | `attribute_arguments_case.cc`. | Accurate. | More typed argument families and indexes. | SAFE SUBSET DONE |
-| `attribute_arg_value` | Present. | Populated for stable strings only. | `DeprecatedAttr` message and replacement when non-empty. | Fixture covers message; replacement not currently covered. | Mostly accurate. | Expand stable string payloads; add replacement test. | SAFE SUBSET DONE |
-| `attribute_arg_constant` | Present. | Populated for `AlignedAttr` when the alignment expr unwraps to an `IntegerLiteral`. | Direct integer literal and shallow `ConstantExpr`/paren/implicit-cast wrappers around a literal. | `attribute_arguments_case.cc` covers direct literal. | Accurate. | Generalized constants, APValue, non-literal expressions, and `CONSTANT_EXPR` kind remain deferred. | SAFE SUBSET DONE |
+| `attribute_args` | Present. | Populated only for supported P7b/P7f safe-subset args. | Stable string payloads and direct/shallow wrapped literal `AlignedAttr`. | `attribute_arguments_case.cc`, `attribute_string_args_case.cc`, `attribute_constant_args_case.cc`. | Accurate. | More typed argument families and indexes. | SAFE SUBSET DONE |
+| `attribute_arg_value` | Present. | Populated for whitelisted stable strings only. | `DeprecatedAttr` message/replacement, `AnnotateAttr` annotation, `SectionAttr` name. | `attribute_arguments_case.cc`, `attribute_string_args_case.cc`. | Updated. | More string payloads only when target-supported and index semantics are clear. | SAFE SUBSET DONE |
+| `attribute_arg_constant` | Present. | Populated for `AlignedAttr` when the alignment expr unwraps to an `IntegerLiteral`. | Direct integer literal and shallow `ConstantExpr`/paren/implicit-cast wrappers around a literal; non-literal `8 + 8` is skipped. | `attribute_arguments_case.cc`, `attribute_constant_args_case.cc`. | Updated. | Generalized constants, APValue, ParamIdx, non-literal expressions, and `CONSTANT_EXPR` kind remain deferred. | SAFE SUBSET DONE |
 | `attribute_arg_type` | Present. | Not populated. | None. | Empty in P7 fixtures. | Roadmap says deferred. | Define type argument semantics and owner id policy. | DEFERRED |
 | `attribute_arg_expr` | Present. | Not populated. | None. | Empty in P7 fixtures. | Roadmap says deferred. | Decide expression processing, duplication, dependent expr, and traversal policy. | DEFERRED |
 | `attribute_arg_name` | Present. | Not populated. | None. | Empty in P7 fixtures. | Roadmap says deferred. | Define what CodeQL means by name args before implementation. | DEFERRED |
@@ -198,12 +203,17 @@ validation tasks.
 
 ### Attribute Arg Value
 
-Safe next expansion area. Candidate stable string APIs include:
+Safe expansion area, with currently implemented payloads:
 
+- `DeprecatedAttr::getMessage` and `getReplacement`.
+- `AnnotateAttr::getAnnotation`.
 - `SectionAttr::getName`.
+
+Candidate stable string APIs still not implemented:
+
 - `AliasAttr::getAliasee`.
 - `WeakRefAttr::getAliasee` if included in scope.
-- `AnnotateAttr::getAnnotation` and `AnnotateTypeAttr::getAnnotation`.
+- `AnnotateTypeAttr::getAnnotation` if a stable owner path is defined.
 - `EnableIfAttr::getMessage` and `DiagnoseIfAttr::getMessage`, but only if
   their expression args remain explicitly deferred.
 - `AvailabilityAttr::getMessage` and `getReplacement`, but platform/version
@@ -214,10 +224,22 @@ Safe next expansion area. Candidate stable string APIs include:
 Do not use `attribute_arg_value` as a catch-all dump for names, expressions,
 types, APValues, or raw AST text.
 
+Current blockers:
+
+- `AliasAttr` could not be validated in the current Darwin fixture because
+  Clang reports aliases as unsupported on this target.
+- `AvailabilityAttr` message/replacement strings are stable getters, but their
+  argument indexes are entangled with platform/version/named fields, so they
+  remain deferred.
+
 ### Attribute Arg Constant
 
-Current support is narrower than CodeQL's full constant model. Safe expansion
-could include Clang API fields that are already scalar integers, such as
+Current support is narrower than CodeQL's full constant model. It now validates
+direct integer literals, parenthesized integer literals, and implicit-cast
+integer literals in `AlignedAttr`; non-literal `aligned(8 + 8)` is skipped.
+
+Future expansion could include Clang API fields that are already scalar
+integers, such as
 `FormatAttr::getFormatIdx`, `FormatAttr::getFirstArg`, `AllocSizeAttr`
 `ParamIdx`, `AllocAlignAttr::getParamIndex`, and `NonNullAttr` index lists.
 
@@ -276,11 +298,11 @@ for name arguments are confirmed.
 
 | Attr class | Payload APIs observed | Classification | Recommended modeling |
 |---|---|---|---|
-| `DeprecatedAttr` | message, replacement strings | SAFE NOW | Message and replacement branches are implemented; add a replacement fixture. |
-| `AlignedAttr` direct integer literal | `getAlignmentExpr` | SAFE NOW | Already implemented for direct literal only. |
+| `DeprecatedAttr` | message, replacement strings | SAFE NOW | Message and replacement branches are implemented and covered. |
+| `AlignedAttr` direct/shallow integer literal | `getAlignmentExpr` | SAFE NOW | Implemented for direct, parenthesized, implicit-cast, and shallow `ConstantExpr`-wrapped integer literals. |
 | `AlignedAttr` expression such as `8 + 8` | `getAlignmentExpr` | SAFE ONLY AFTER ExprProcessor support | Model as expr or constant-expr after design; do not fold silently. |
 | `AlignedAttr` type form | `getAlignmentType` | SAFE ONLY AFTER TypeProcessor support | Candidate for `attribute_arg_type`; preserve type spelling policy first. |
-| `AnnotateAttr` | annotation string, `Expr **args_`, delayed args | PARTIAL SAFE | Annotation string safe; expr args defer. |
+| `AnnotateAttr` | annotation string, `Expr **args_`, delayed args | PARTIAL SAFE | Annotation string implemented; expr args defer. |
 | `AnnotateTypeAttr` | annotation string, `Expr **args_`, delayed args | PARTIAL SAFE | Annotation string safe; owner/type placement and expr args defer. |
 | `CleanupAttr` | `FunctionDecl *getFunctionDecl` | DEFER | Decl reference is not clearly value/name/expr; needs CodeQL mapping. |
 | `ModeAttr` | `IdentifierInfo *getMode` | DEFER | Likely `attribute_arg_name`, but semantics unclear. |
@@ -292,8 +314,8 @@ for name arguments are confirmed.
 | `AssumeAlignedAttr` | alignment/offset `Expr *` | SAFE ONLY AFTER ExprProcessor support | Candidate expr subset after duplication policy. |
 | `EnableIfAttr` | condition `Expr *`, message string | PARTIAL SAFE | Message string safe only if condition remains deferred or separately modeled. |
 | `DiagnoseIfAttr` | condition `Expr *`, message string, diagnostic enum | PARTIAL SAFE | Message string safe; condition and enum/name policy deferred. |
-| `SectionAttr` | name string | SAFE NOW | Good P7f-1 string candidate. |
-| `AliasAttr` | aliasee string | SAFE NOW | Good P7f-1 string candidate; do not treat as decl ref unless proven. |
+| `SectionAttr` | name string | SAFE NOW | Implemented for target-valid section names. |
+| `AliasAttr` | aliasee string | DEFER | Getter is stable, but current Darwin validation target rejects alias attributes; needs target-supported fixture. |
 | Other visible string attrs | generated `StringRef` getters | AUDIT FIRST | Add one family at a time with tests and docs. |
 | Other visible `Expr **args_` attrs | expression ranges | UNSAFE / DO NOT MODEL YET | Too broad for current ExprProcessor guarantees. |
 
@@ -390,7 +412,11 @@ Implemented behaviors covered by tests:
 - Function attribute presence.
 - Function owner links.
 - Deprecated message string payload.
-- Direct integer literal aligned payload.
+- Deprecated replacement string payload.
+- Annotate annotation string payload.
+- Section name string payload.
+- Direct and shallow wrapped integer literal aligned payloads.
+- `AlignedAttr` non-literal expression skip behavior for `8 + 8`.
 - Type owner links for record/enum/alias.
 - Var owner links for field/global/param/local.
 - Stmt owner links for `fallthrough` and `likely`.
@@ -402,8 +428,9 @@ Behaviors currently more manual than asserted:
 - No duplicate `params` rows.
 - Unsupported `AttributedStmt` wrappers skipped.
 - P7f tables remain empty in owner-link fixture.
-- Deprecated replacement string regression coverage.
 - Additional supported inner stmt kinds in `getSupportedAttributedStmtOwnerId`.
+- Alias string payload on a target that supports `AliasAttr`.
+- Availability string payload indexes.
 
 Future P7f tests should be separate from owner-link tests. Owner-link tests
 should prove stable ownership; argument tests should prove row kind, argument
@@ -414,10 +441,11 @@ index, typed payload, and deferred table emptiness where applicable.
 | Phase | Goal | Safe candidate attrs | Forbidden cases | Validation strategy | Expected populated tables | Expected empty tables | Risk |
 |---|---|---|---|---|---|---|---|
 | P7f-audit closeout | Land this audit and align docs. | None. | Behavior/schema/test changes. | `git diff --check`, doc diff, keyword scan. | None new. | No DB change. | Low |
-| P7f-1 value expansion | Add stable string payloads only. | `SectionAttr`, `AliasAttr`, `AnnotateAttr` annotation; add a `DeprecatedAttr` replacement regression fixture. | Expr args, type args, name args, raw dumps. | Focused fixture plus SQLite joins for `attribute_args` and `attribute_arg_value`; full test suite. | `attribute_args`, `attribute_arg_value`. | `attribute_arg_type`, `attribute_arg_expr`, `attribute_arg_name`. | Low-Medium |
-| P7f-2 expr minimal subset | Define and implement one expression-backed Attr. | Non-literal `AlignedAttr` or `AssumeAlignedAttr` after cache audit. | Dependent exprs, broad `Expr **args_`, APValue dumps. | Prove no duplicate expr rows; inspect `exprs`, value tables, `attribute_arg_expr`. | `attribute_args`, `attribute_arg_expr`, maybe expression value tables. | `attribute_arg_type`, `attribute_arg_name`. | High |
-| P7f-3 type minimal subset | Define and implement one TypeSourceInfo-backed Attr. | `AlignedAttr` type form or `VecTypeHintAttr`. | Dependent types, broad TypeAttr sweep, canonical/spelling ambiguity. | SQL for `attribute_arg_type` and referenced type rows; alias/canonical fixture. | `attribute_args`, `attribute_arg_type`. | `attribute_arg_expr`, `attribute_arg_name`. | High |
-| P7f-4 name design | Confirm CodeQL name-argument semantics. | Study `ModeAttr`, `FormatAttr`, `AvailabilityAttr`. | Treating strings/decl refs/exprs as names without proof. | Prefer design doc first; if implemented, one Attr and one fixture. | Maybe `attribute_arg_name`. | Unrelated typed payload tables. | High |
+| P7f-1 value expansion | Add stable string payloads only. | DONE for `DeprecatedAttr` message/replacement, `AnnotateAttr` annotation, and `SectionAttr` name; next candidates require blockers to clear. | Expr args, type args, name args, raw dumps, target-unsupported `AliasAttr`. | Focused fixture plus SQLite joins for `attribute_args` and `attribute_arg_value`; full test suite. | `attribute_args`, `attribute_arg_value`. | `attribute_arg_type`, `attribute_arg_expr`, `attribute_arg_name`. | Low-Medium |
+| P7f-2 constant safe subset | Validate direct/shallow literal constants. | DONE for direct, parenthesized, unsigned/implicit-cast `AlignedAttr`; `aligned(8 + 8)` is skipped. | APValue, arbitrary expression evaluation, ParamIdx as raw scalar. | Focused fixture plus SQLite joins for `attribute_arg_constant`; full test suite. | `attribute_args`, `attribute_arg_constant`. | `attribute_arg_type`, `attribute_arg_expr`, `attribute_arg_name`. | Medium |
+| P7f-3 expr minimal subset | Define and implement one expression-backed Attr. | No safe implementation in this checkpoint: generic expression id API and duplicate policy are not ready. | Dependent exprs, broad `Expr **args_`, APValue dumps. | Prove no duplicate expr rows; inspect `exprs`, value tables, `attribute_arg_expr`. | None yet. | `attribute_arg_expr`. | High |
+| P7f-4 type minimal subset | Define and implement one TypeSourceInfo-backed Attr. | No safe implementation in this checkpoint: `@type`/`@usertype` and spelling/canonical semantics remain open. | Dependent types, broad TypeAttr sweep, canonical/spelling ambiguity. | SQL for `attribute_arg_type` and referenced type rows; alias/canonical fixture. | None yet. | `attribute_arg_type`. | High |
+| P7f-5 name design | Confirm CodeQL name-argument semantics. | Study `ModeAttr`, `FormatAttr`, `AvailabilityAttr`. | Treating strings/decl refs/exprs as names without proof. | Prefer design doc first; if implemented, one Attr and one fixture. | None yet. | `attribute_arg_name`. | High |
 | P7f-5 generalized constants | Audit `CONSTANT_EXPR`, APValue, ParamIdx, scalar int fields. | Maybe `FormatAttr` indexes after expression-row policy. | Raw scalar integer insertion into `@expr ref` table. | Dedicated SQL evidence for expression/value rows and kind mapping. | `attribute_arg_constant` or future `CONSTANT_EXPR` mapping. | Type/name unless in scope. | High |
 | P7 final docs decision | Decide datatable-list convention and final P7 status. | All P7 tables only after semantics and coverage are complete. | Marking DONE while P7f remains deferred. | Full suite plus P7 DB matrix checks. | All intended P7 tables. | None unless explicitly out of scope. | Medium |
 
@@ -464,14 +492,36 @@ Use `build/demo -c config.example.toml -s <fixture> -o <db>` for focused DB
 generation in this checkout. Do not refer to `generate_database.sh` unless that
 script exists.
 
+Recent P7f SQLite evidence:
+
+```text
+attribute_string_args_case:
+annotate|1|0|p7f_annotation
+deprecated|1|0|use p7f_replacement_target
+deprecated|1|1|p7f_replacement_target
+section|1|0|__DATA,p7f_section
+complex|0|0|0|0
+
+attribute_constant_args_case:
+p7f_aligned_direct|aligned|2|0|16
+p7f_aligned_paren|aligned|2|0|32
+p7f_aligned_unsigned|aligned|2|0|64
+attributes|4
+attribute_args|3
+attribute_arg_constant|3
+attribute_arg_type|0
+attribute_arg_expr|0
+attribute_arg_name|0
+```
+
 ## 12. Final Recommendation
 
-Keep P7 marked PARTIAL. Treat P7a/P7b and P7c/P7d owner links as safe-subset
-done, treat `stmtattributes` as conservative partial safe subset, and keep all
-P7f complex argument tables deferred.
+Keep P7 marked PARTIAL. Treat P7a/P7b, P7c/P7d owner links, and the narrow P7f
+string/constant payload subsets as safe-subset done. Treat `stmtattributes` as
+conservative partial safe subset, and keep complex `attribute_arg_type`,
+`attribute_arg_expr`, and `attribute_arg_name` work deferred.
 
-The safest next coding task is P7f-1: expand `attribute_arg_value` for a small
-set of stable string payload Attr classes. The task should add one focused
-fixture, assert semantic joins rather than generated ids, and explicitly verify
-that `attribute_arg_type`, `attribute_arg_expr`, and `attribute_arg_name` remain
-empty.
+The safest next coding task is a blocker-clearing audit for either target-
+supported alias string payloads or AvailabilityAttr argument indexes. Expr,
+type, and name payload tables should not be implemented until their semantic
+risks above are resolved.

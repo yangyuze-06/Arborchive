@@ -137,14 +137,17 @@ P7 先抽取 attribute presence graph，再处理 argument system。presence 与
   implemented, but the full attribute system is not complete and should not be
   marked `DONE` yet.
 - Implemented safe subset: function attribute presence; `DeprecatedAttr` stable
-  string payloads in `attribute_arg_value`; direct integer literal `AlignedAttr`
-  payloads in `attribute_arg_constant`; conservative type, variable, and
-  statement owner links in `typeattributes`, `varattributes`, and
+  string payloads, `AnnotateAttr` annotation strings, and `SectionAttr` section
+  names in `attribute_arg_value`; direct and shallow wrapped integer-literal
+  `AlignedAttr` payloads in `attribute_arg_constant`; conservative type,
+  variable, and statement owner links in `typeattributes`, `varattributes`, and
   `stmtattributes`.
 - Deferred: P7f `attribute_arg_type`, `attribute_arg_expr`,
   `attribute_arg_name`, generalized `CONSTANT_EXPR`, dependent/template
-  attribute arguments, named arguments, and other complex argument forms.
-- Analysis: `docs/analysis/p7_attribute_owner_links.md`.
+  attribute arguments, named arguments, target-unsupported alias strings,
+  availability named fields, and other complex argument forms.
+- Analysis: `docs/analysis/p7_attribute_owner_links.md` and
+  `docs/analysis/p7_remaining_attribute_scope_audit.md`.
 
 #### P7a: Attribute Presence Graph
 

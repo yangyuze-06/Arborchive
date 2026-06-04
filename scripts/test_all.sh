@@ -20,6 +20,8 @@ CASES=(
   "unit-tests/p7/attribute_presence_case"
   "unit-tests/p7/attribute_arguments_case"
   "unit-tests/p7/attribute_owner_links_case"
+  "unit-tests/p7/attribute_string_args_case"
+  "unit-tests/p7/attribute_constant_args_case"
 )
 
 if [[ -z "${LLVM_CONFIG:-}" ]]; then

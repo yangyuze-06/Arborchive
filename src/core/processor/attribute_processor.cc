@@ -109,6 +109,20 @@ void AttributeProcessor::recordAttributeArguments(int attr_id,
     return;
   }
 
+  if (const auto *annotate = llvm::dyn_cast<clang::AnnotateAttr>(attr)) {
+    if (annotate->getAnnotationLength() > 0)
+      recordStringArgument(attr_id, 0, annotate->getAnnotation().str(),
+                           attr->getLocation());
+    return;
+  }
+
+  if (const auto *section = llvm::dyn_cast<clang::SectionAttr>(attr)) {
+    if (section->getNameLength() > 0)
+      recordStringArgument(attr_id, 0, section->getName().str(),
+                           attr->getLocation());
+    return;
+  }
+
   if (const auto *aligned = llvm::dyn_cast<clang::AlignedAttr>(attr)) {
     if (aligned->isAlignmentExpr())
       recordIntegerConstantArgument(attr_id, 0, aligned->getAlignmentExpr());
