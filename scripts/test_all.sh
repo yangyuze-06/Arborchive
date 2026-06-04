@@ -19,6 +19,7 @@ CASES=(
   "unit-tests/p6/lambda_case"
   "unit-tests/p7/attribute_presence_case"
   "unit-tests/p7/attribute_arguments_case"
+  "unit-tests/p7/attribute_owner_links_case"
   "unit-tests/p8/initialization_case"
 )
 

@@ -14,9 +14,10 @@ public:
   int processType(const Type *T);
 
   // Specific type declaration processing methods
-  void processRecordDecl(const RecordDecl *RD);
-  void processEnumDecl(const EnumDecl *ED);
-  void processTypedefDecl(const TypedefDecl *TND);
+  int processRecordDecl(const RecordDecl *RD);
+  int processEnumDecl(const EnumDecl *ED);
+  int processTypedefDecl(const TypedefDecl *TND);
+  int processTypeAliasDecl(const TypeAliasDecl *TAD);
   int processTemplateTypeParmDecl(const TemplateTypeParmDecl *TTPD);
   int processTemplateTemplateParmDecl(const TemplateTemplateParmDecl *TTPD);
   int processDependentType(QualType QT);
@@ -52,6 +53,7 @@ private:
   void processTypedefBase(const TypedefNameDecl *TND, int typedefId);
   void processArraySizes(const ArrayType *AT, int derivedTypeId);
   void processPointerishSize(const Type *T, int derivedTypeId);
+  int processTypedefNameDecl(const TypedefNameDecl *TND);
 
   void recordTypeDef(const TypeDecl *TD);
   void recordTopTypeDecl(const TypeDecl *TD);
