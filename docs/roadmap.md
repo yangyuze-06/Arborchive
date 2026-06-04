@@ -151,6 +151,10 @@ P7 先抽取 attribute presence graph，再处理 argument system。presence 与
 - Tables: `initialisers`, `braced_initialisers`, `aggregate_field_init`, `aggregate_array_init`
 - Focus: `InitListExpr`、aggregate initialization、braced initialization
 - Complexity: Medium
+- Status: DONE (P8 safe subset)
+- Implemented scope: `VarDecl::getInit()` variable initializers, braced initializer marker rows, and aggregate child initializer dependency resolution.
+- Validation: `tests/unit-tests/p8/initialization_case.cc` via `scripts/test_all.sh`; representative SQL confirmed `initialisers`, `braced_initialisers`, `aggregate_field_init`, and `aggregate_array_init` rows.
+- Boundary: constructor initializers、member initializers、default member initializers remain out of scope for P8.
 
 ### P9: Constexpr / Consteval Flow
 

@@ -16,6 +16,7 @@ template void StorageFacade::insertClassObj<DbModel::AttributeArgName&>(DbModel:
 template void StorageFacade::insertClassObj<DbModel::AttributeArgType&>(DbModel::AttributeArgType&);
 template void StorageFacade::insertClassObj<DbModel::AttributeArgValue&>(DbModel::AttributeArgValue&);
 template void StorageFacade::insertClassObj<DbModel::BitField&>(DbModel::BitField&);
+template void StorageFacade::insertClassObj<DbModel::BracedInitialiser&>(DbModel::BracedInitialiser&);
 template void StorageFacade::insertClassObj<DbModel::BuiltinType_&>(DbModel::BuiltinType_&);
 template void StorageFacade::insertClassObj<DbModel::ClassInstantiation&>(DbModel::ClassInstantiation&);
 template void StorageFacade::insertClassObj<DbModel::ClassTemplateArgument&>(DbModel::ClassTemplateArgument&);
@@ -77,6 +78,7 @@ template void StorageFacade::insertClassObj<DbModel::IfElse&>(DbModel::IfElse&);
 template void StorageFacade::insertClassObj<DbModel::IfInit&>(DbModel::IfInit&);
 template void StorageFacade::insertClassObj<DbModel::IfThen&>(DbModel::IfThen&);
 template void StorageFacade::insertClassObj<DbModel::Includes&>(DbModel::Includes&);
+template void StorageFacade::insertClassObj<DbModel::Initialiser&>(DbModel::Initialiser&);
 template void StorageFacade::insertClassObj<DbModel::IsCall&>(DbModel::IsCall&);
 template void StorageFacade::insertClassObj<DbModel::IsClassTemplate&>(DbModel::IsClassTemplate&);
 template void StorageFacade::insertClassObj<DbModel::IsComplete&>(DbModel::IsComplete&);
