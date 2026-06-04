@@ -13,15 +13,18 @@ class StmtProcessor : public BaseProcessor {
 public:
   int getStmtId(Stmt *stmt, StmtKind stmtKind);
 
-  void processIfStmt(IfStmt *ifStmt);
-  void processForStmt(ForStmt *forStmt);
-  void processCXXForRangeStmt(CXXForRangeStmt *rangeForStmt);
-  void processWhileStmt(WhileStmt *whileStmt);
-  void processDoStmt(DoStmt *doStmt);
-  void processSwitchStmt(SwitchStmt *switchStmt);
-  void processBlockStmt(CompoundStmt *blockStmt);
-  void processReturnStmt(ReturnStmt *returnStmt);
-  void processDeclStmt(DeclStmt *declStmt);
+  int getSupportedAttributedStmtOwnerId(AttributedStmt *attributedStmt);
+
+  int processIfStmt(IfStmt *ifStmt);
+  int processForStmt(ForStmt *forStmt);
+  int processCXXForRangeStmt(CXXForRangeStmt *rangeForStmt);
+  int processWhileStmt(WhileStmt *whileStmt);
+  int processDoStmt(DoStmt *doStmt);
+  int processSwitchStmt(SwitchStmt *switchStmt);
+  int processBlockStmt(CompoundStmt *blockStmt);
+  int processReturnStmt(ReturnStmt *returnStmt);
+  int processDeclStmt(DeclStmt *declStmt);
+  int processNullStmt(NullStmt *nullStmt);
 
   StmtProcessor(ASTContext *ast_context, const PrintingPolicy pp)
       : BaseProcessor(ast_context, pp) {};

@@ -14,6 +14,8 @@ public:
   int processParmVarDecl(const ParmVarDecl *PVD);
   int processFieldDecl(const FieldDecl *FD);
   int resolveMemberVarId(const FieldDecl *FD, int type_id);
+  int getLastVariableEntityId() const { return _varId; }
+  int getCanonicalVariableEntityId(const VarDecl *VD) const;
 
   VariableProcessor(ASTContext *ast_context, const PrintingPolicy pp)
       : BaseProcessor(ast_context, pp) {};

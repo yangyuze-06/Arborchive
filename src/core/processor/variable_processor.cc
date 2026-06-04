@@ -17,9 +17,13 @@ int VariableProcessor::processVarDecl(const VarDecl *VD) {
   if (!VD || VD->isImplicit())
     return -1;
 
+  _varId = -1;
+
   KeyType VDKey = KeyGen::Var::makeKey(VD, ast_context_);
-  if (SEARCH_VARIABLE_CACHE(VDKey))
+  if (auto cachedId = SEARCH_VARIABLE_CACHE(VDKey)) {
+    _varId = *cachedId;
     return -1;
+  }
 
   int varId;
 
@@ -34,6 +38,7 @@ int VariableProcessor::processVarDecl(const VarDecl *VD) {
   } else {
     varId = processLocalScopeVar(VD); // @localvariables or @params directly
   }
+  _varId = varId;
 
   LocIdPair *locIdPair = SrcLocRecorder::processDefault(VD, ast_context_);
   _name = VD->getNameAsString();
@@ -71,6 +76,14 @@ int VariableProcessor::processVarDecl(const VarDecl *VD) {
 
   STG.insertClassObj(varDecl);
   return _varDeclId;
+}
+
+int VariableProcessor::getCanonicalVariableEntityId(const VarDecl *VD) const {
+  if (!VD)
+    return -1;
+
+  KeyType VDKey = KeyGen::Var::makeKey(VD, ast_context_);
+  return SEARCH_VARIABLE_CACHE(VDKey).value_or(-1);
 }
 
 void VariableProcessor::recordSpecialize(const VarDecl *VD) {
@@ -199,8 +212,17 @@ int VariableProcessor::processParmVarDecl(const ParmVarDecl *PVD) {
   if (!PVD || PVD->isImplicit())
     return -1;
 
+  _varId = -1;
+
+  KeyType PVDKey = KeyGen::Var::makeKey(PVD, ast_context_);
+  if (auto cachedId = SEARCH_VARIABLE_CACHE(PVDKey)) {
+    _varId = *cachedId;
+    return -1;
+  }
+
   // Process parameter and get var ID
   int varId = processParam(PVD);
+  _varId = varId;
 
   // Generate var_decl_id and create VarDecl record
   LocIdPair *locIdPair = SrcLocRecorder::processDefault(PVD, ast_context_);
@@ -226,6 +248,7 @@ int VariableProcessor::processParmVarDecl(const ParmVarDecl *PVD) {
 
   DbModel::VarDecl varDecl = {_varDeclId, varId, _typeId, _name,
                               locIdPair->spec_id};
+  INSERT_VARIABLE_CACHE(PVDKey, varId);
   STG.insertClassObj(varDecl);
   return _varDeclId;
 }
@@ -233,6 +256,8 @@ int VariableProcessor::processParmVarDecl(const ParmVarDecl *PVD) {
 int VariableProcessor::processFieldDecl(const FieldDecl *FD) {
   if (!FD)
     return -1;
+
+  _varId = -1;
 
   // Process member variable and get var ID
   LocIdPair *locIdPair = SrcLocRecorder::processDefault(FD, ast_context_);
@@ -253,6 +278,7 @@ int VariableProcessor::processFieldDecl(const FieldDecl *FD) {
 
   // Process member variable to get varId
   int varId = processMemberVar(FD);
+  _varId = varId;
 
   DbModel::VarDecl varDecl = {_varDeclId, varId, _typeId, _name,
                               locIdPair->spec_id};

@@ -77,6 +77,7 @@ public:
   bool VisitRecordType(clang::RecordType *RT);
   bool VisitEnumDecl(clang::EnumDecl *decl);
   bool VisitTypedefDecl(clang::TypedefDecl *decl);
+  bool VisitTypeAliasDecl(clang::TypeAliasDecl *decl);
   bool VisitBuiltinType(clang::BuiltinType *BT);
   bool VisitTemplateTypeParmDecl(clang::TemplateTypeParmDecl *decl);
   bool VisitNonTypeTemplateParmDecl(clang::NonTypeTemplateParmDecl *decl);
@@ -100,6 +101,8 @@ public:
   bool VisitCompoundStmt(clang::CompoundStmt *compoundStmt);
   bool VisitReturnStmt(clang::ReturnStmt *returnStmt);
   bool VisitDeclStmt(clang::DeclStmt *declStmt);
+  bool VisitNullStmt(clang::NullStmt *nullStmt);
+  bool VisitAttributedStmt(clang::AttributedStmt *attributedStmt);
 
   // Expr Family
   bool VisitDeclRefExpr(clang::DeclRefExpr *expr);

@@ -25,6 +25,57 @@ void AttributeProcessor::processFunctionAttributes(
   }
 }
 
+void AttributeProcessor::processTypeAttributes(int type_id,
+                                               const clang::TypeDecl *decl) {
+  if (type_id == -1 || !decl)
+    return;
+
+  for (const clang::Attr *attr : decl->attrs()) {
+    const int attr_id = recordAttribute(attr);
+    if (attr_id == -1)
+      continue;
+
+    recordAttributeArguments(attr_id, attr);
+
+    DbModel::TypeAttribute type_attr = {type_id, attr_id};
+    STG.insertClassObj(type_attr);
+  }
+}
+
+void AttributeProcessor::processVariableAttributes(int var_id,
+                                                   const clang::Decl *decl) {
+  if (var_id == -1 || !decl)
+    return;
+
+  for (const clang::Attr *attr : decl->attrs()) {
+    const int attr_id = recordAttribute(attr);
+    if (attr_id == -1)
+      continue;
+
+    recordAttributeArguments(attr_id, attr);
+
+    DbModel::VarAttribute var_attr = {var_id, attr_id};
+    STG.insertClassObj(var_attr);
+  }
+}
+
+void AttributeProcessor::processStatementAttributes(
+    int stmt_id, const clang::AttributedStmt *stmt) {
+  if (stmt_id == -1 || !stmt)
+    return;
+
+  for (const clang::Attr *attr : stmt->getAttrs()) {
+    const int attr_id = recordAttribute(attr);
+    if (attr_id == -1)
+      continue;
+
+    recordAttributeArguments(attr_id, attr);
+
+    DbModel::StmtAttribute stmt_attr = {stmt_id, attr_id};
+    STG.insertClassObj(stmt_attr);
+  }
+}
+
 int AttributeProcessor::recordAttribute(const clang::Attr *attr) {
   if (!attr || attr->isImplicit())
     return -1;

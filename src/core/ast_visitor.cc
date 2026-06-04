@@ -115,10 +115,13 @@ bool ASTVisitor::VisitCXXDeductionGuideDecl(
 // Variable Family
 bool ASTVisitor::VisitVarDecl(clang::VarDecl *decl) {
   int var_decl_id = variable_processor_->processVarDecl(decl);
+  int var_id = variable_processor_->getLastVariableEntityId();
 
   // Process variable specifiers
   if (var_decl_id != -1)
     specifier_processor_->processVariableSpecifiers(var_decl_id, decl);
+  if (var_decl_id != -1 && !llvm::isa<clang::ParmVarDecl>(decl))
+    attribute_processor_->processVariableAttributes(var_id, decl);
 
   // Process type with qualifiers
   int type_id = type_processor_->processType(decl->getType().getTypePtr());
@@ -139,10 +142,14 @@ bool ASTVisitor::VisitVarDecl(clang::VarDecl *decl) {
 
 bool ASTVisitor::VisitParmVarDecl(clang::ParmVarDecl *decl) {
   int var_decl_id = variable_processor_->processParmVarDecl(decl);
+  int var_id = variable_processor_->getCanonicalVariableEntityId(decl);
+  if (var_id == -1)
+    var_id = variable_processor_->getLastVariableEntityId();
 
   // Process variable specifiers
   if (var_decl_id != -1)
     specifier_processor_->processVariableSpecifiers(var_decl_id, decl);
+  attribute_processor_->processVariableAttributes(var_id, decl);
 
   // Process type with qualifiers
   int type_id = type_processor_->processType(decl->getType().getTypePtr());
@@ -155,10 +162,12 @@ bool ASTVisitor::VisitFieldDecl(clang::FieldDecl *decl) {
   int type_id = type_processor_->processType(decl->getType().getTypePtr());
 
   int var_decl_id = variable_processor_->processFieldDecl(decl);
+  int var_id = variable_processor_->getLastVariableEntityId();
 
   // Process variable specifiers
   if (var_decl_id != -1)
     specifier_processor_->processVariableSpecifiers(var_decl_id, decl);
+  attribute_processor_->processVariableAttributes(var_id, decl);
 
   specifier_processor_->processTypeQualifiers(type_id, decl->getType());
   return true;
@@ -166,7 +175,8 @@ bool ASTVisitor::VisitFieldDecl(clang::FieldDecl *decl) {
 
 // Type Family
 bool ASTVisitor::VisitRecordDecl(clang::RecordDecl *decl) {
-  type_processor_->processRecordDecl(decl);
+  int type_id = type_processor_->processRecordDecl(decl);
+  attribute_processor_->processTypeAttributes(type_id, decl);
   return true;
 }
 
@@ -176,12 +186,20 @@ bool ASTVisitor::VisitRecordType(clang::RecordType *RT) {
 }
 
 bool ASTVisitor::VisitEnumDecl(clang::EnumDecl *decl) {
-  type_processor_->processEnumDecl(decl);
+  int type_id = type_processor_->processEnumDecl(decl);
+  attribute_processor_->processTypeAttributes(type_id, decl);
   return true;
 }
 
 bool ASTVisitor::VisitTypedefDecl(clang::TypedefDecl *decl) {
-  type_processor_->processTypedefDecl(decl);
+  int type_id = type_processor_->processTypedefDecl(decl);
+  attribute_processor_->processTypeAttributes(type_id, decl);
+  return true;
+}
+
+bool ASTVisitor::VisitTypeAliasDecl(clang::TypeAliasDecl *decl) {
+  int type_id = type_processor_->processTypeAliasDecl(decl);
+  attribute_processor_->processTypeAttributes(type_id, decl);
   return true;
 }
 
@@ -290,6 +308,18 @@ bool ASTVisitor::VisitDeclStmt(clang::DeclStmt *declStmt) {
 
 bool ASTVisitor::VisitCompoundStmt(clang::CompoundStmt *compoundStmt) {
   stmt_processor_->processBlockStmt(compoundStmt);
+  return true;
+}
+
+bool ASTVisitor::VisitNullStmt(clang::NullStmt *nullStmt) {
+  stmt_processor_->processNullStmt(nullStmt);
+  return true;
+}
+
+bool ASTVisitor::VisitAttributedStmt(clang::AttributedStmt *attributedStmt) {
+  int stmt_id =
+      stmt_processor_->getSupportedAttributedStmtOwnerId(attributedStmt);
+  attribute_processor_->processStatementAttributes(stmt_id, attributedStmt);
   return true;
 }
 
