@@ -133,15 +133,18 @@ P5 拆分 inheritance graph 和 ABI layout extraction，避免把类型层级关
 
 P7 先抽取 attribute presence graph，再处理 argument system。presence 与 argument serialization 风险分离。
 
-- Status: PARTIAL. P7a/P7b minimal safe subset is implemented, but the full
-  attribute system is not complete and should not be marked `DONE` yet.
+- Status: PARTIAL. P7a/P7b and the P7c/P7d/P7e owner-link safe subsets are
+  implemented, but the full attribute system is not complete and should not be
+  marked `DONE` yet.
 - Implemented safe subset: function attribute presence; `DeprecatedAttr` stable
   string payloads in `attribute_arg_value`; direct integer literal `AlignedAttr`
-  payloads in `attribute_arg_constant`.
-- Deferred: P7c type owner links / `typeattributes`; P7d variable owner links /
-  `varattributes`; P7e statement owner links / `stmtattributes`; P7f
-  `attribute_arg_type`, `attribute_arg_expr`, `attribute_arg_name`, and complex
-  argument forms.
+  payloads in `attribute_arg_constant`; conservative type, variable, and
+  statement owner links in `typeattributes`, `varattributes`, and
+  `stmtattributes`.
+- Deferred: P7f `attribute_arg_type`, `attribute_arg_expr`,
+  `attribute_arg_name`, generalized `CONSTANT_EXPR`, dependent/template
+  attribute arguments, named arguments, and other complex argument forms.
+- Analysis: `docs/analysis/p7_attribute_owner_links.md`.
 
 #### P7a: Attribute Presence Graph
 
