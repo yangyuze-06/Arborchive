@@ -30,7 +30,7 @@ sqlite3 tests/output/unit-tests-p7-attribute_arguments_case.db "select * from at
 sqlite3 tests/output/unit-tests-p7-attribute_arguments_case.db "select * from attribute_arg_value order by arg;"
 sqlite3 tests/output/unit-tests-p7-attribute_arguments_case.db "select * from attribute_arg_constant order by arg;"
 sqlite3 tests/output/unit-tests-p7-attribute_arguments_case.db "select aa.id, a.name, aa.kind, aa.\"index\" from attribute_args aa join attributes a on aa.attribute = a.id order by aa.id;"
-sqlite3 tests/output/unit-tests-p7-attribute_arguments_case.db "select v.str from attribute_arg_constant aac join valuebind vb on vb.expr = aac.constant join values v on v.id = vb.val order by aac.arg;"
+sqlite3 tests/output/unit-tests-p7-attribute_arguments_case.db "select v.str from attribute_arg_constant aac join valuebind vb on vb.expr = aac.constant join \"values\" v on v.id = vb.val order by aac.arg;"
 ```
 
 ## Evidence Requirements
