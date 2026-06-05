@@ -123,9 +123,25 @@ void AttributeProcessor::recordAttributeArguments(int attr_id,
     return;
   }
 
+  if (const auto *warn_unused =
+          llvm::dyn_cast<clang::WarnUnusedResultAttr>(attr)) {
+    if (warn_unused->getMessageLength() > 0)
+      recordStringArgument(attr_id, 0, warn_unused->getMessage().str(),
+                           attr->getLocation());
+    return;
+  }
+
   if (const auto *aligned = llvm::dyn_cast<clang::AlignedAttr>(attr)) {
     if (aligned->isAlignmentExpr())
-      recordIntegerConstantArgument(attr_id, 0, aligned->getAlignmentExpr());
+      recordAlignedArgument(attr_id, 0, aligned->getAlignmentExpr());
+    return;
+  }
+
+  if (const auto *assume_aligned =
+          llvm::dyn_cast<clang::AssumeAlignedAttr>(attr)) {
+    recordNonLiteralExpressionArgument(attr_id, 0,
+                                       assume_aligned->getAlignment());
+    recordNonLiteralExpressionArgument(attr_id, 1, assume_aligned->getOffset());
     return;
   }
 }
@@ -154,6 +170,32 @@ void AttributeProcessor::recordStringArgument(int attr_id, int index,
   STG.insertClassObj(arg_value);
 }
 
+void AttributeProcessor::recordAlignedArgument(int attr_id, int index,
+                                               const clang::Expr *expr) {
+  if (!expr_processor_)
+    return;
+
+  if (getStableIntegerLiteral(expr)) {
+    recordIntegerConstantArgument(attr_id, index, expr);
+    return;
+  }
+
+  const clang::Expr *value_expr = getStableNonLiteralExpr(expr);
+  if (!value_expr)
+    return;
+
+  recordExpressionArgument(attr_id, index, value_expr);
+}
+
+void AttributeProcessor::recordNonLiteralExpressionArgument(
+    int attr_id, int index, const clang::Expr *expr) {
+  const clang::Expr *value_expr = getStableNonLiteralExpr(expr);
+  if (!value_expr)
+    return;
+
+  recordExpressionArgument(attr_id, index, value_expr);
+}
+
 void AttributeProcessor::recordIntegerConstantArgument(int attr_id, int index,
                                                        const clang::Expr *expr) {
   if (!expr_processor_)
@@ -176,6 +218,24 @@ void AttributeProcessor::recordIntegerConstantArgument(int attr_id, int index,
   STG.insertClassObj(arg_constant);
 }
 
+void AttributeProcessor::recordExpressionArgument(int attr_id, int index,
+                                                  const clang::Expr *expr) {
+  if (!expr_processor_ || !expr)
+    return;
+
+  int expr_id = expr_processor_->getOrProcessExprId(expr);
+  if (expr_id == -1)
+    return;
+
+  int arg_id = recordAttributeArg(attr_id, AttributeArgKind::EXPR, index,
+                                  expr->getBeginLoc());
+  if (arg_id == -1)
+    return;
+
+  DbModel::AttributeArgExpr arg_expr = {arg_id, expr_id};
+  STG.insertClassObj(arg_expr);
+}
+
 const clang::IntegerLiteral *
 AttributeProcessor::getStableIntegerLiteral(const clang::Expr *expr) const {
   const clang::Expr *current = expr;
@@ -189,6 +249,27 @@ AttributeProcessor::getStableIntegerLiteral(const clang::Expr *expr) const {
     }
 
     return llvm::dyn_cast<clang::IntegerLiteral>(current);
+  }
+
+  return nullptr;
+}
+
+const clang::Expr *
+AttributeProcessor::getStableNonLiteralExpr(const clang::Expr *expr) const {
+  const clang::Expr *current = expr;
+  for (int depth = 0; current && depth < 4; ++depth) {
+    current = current->IgnoreParenImpCasts();
+
+    if (const auto *constant_expr =
+            llvm::dyn_cast<clang::ConstantExpr>(current)) {
+      current = constant_expr->getSubExpr();
+      continue;
+    }
+
+    if (llvm::isa<clang::IntegerLiteral>(current))
+      return nullptr;
+
+    return current;
   }
 
   return nullptr;

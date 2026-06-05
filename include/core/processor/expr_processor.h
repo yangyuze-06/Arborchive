@@ -16,6 +16,8 @@ class TypeProcessor;
 
 class ExprProcessor : public BaseProcessor {
 public:
+  int getOrProcessExprId(const clang::Expr *expr);
+
   void processDeclRef(DeclRefExpr *expr);
 
   void processUnaryOperator(const UnaryOperator *op);
@@ -54,6 +56,9 @@ private:
   int _varId;
   int _varDeclId;
   std::string _name;
+
+  int findCachedExprId(const Expr *expr) const;
+  bool canProcessExprForReference(const Expr *expr) const;
 
   int processBaseExpr(Expr *expr, ExprKind exprKind);
 
