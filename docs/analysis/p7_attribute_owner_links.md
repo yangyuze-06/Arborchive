@@ -30,7 +30,7 @@ Implemented safe subsets:
   - `[[fallthrough]]` linked to the inner `NullStmt` / `StmtKind::EMPTY`
   - `[[likely]]` linked to the inner `ReturnStmt` / `StmtKind::RETURN`
 
-Deferred scope at the time of this owner-link note:
+Deferred scope at the time of the original owner-link note:
 
 - P7f remains deferred.
 - `attribute_arg_type` is not populated.
@@ -42,7 +42,11 @@ Deferred scope at the time of this owner-link note:
 
 Later P7f safe-subset work may add narrow argument payloads while keeping P7
 overall `PARTIAL`. See `docs/analysis/p7_remaining_attribute_scope_audit.md`
-for current P7f status.
+for current P7f status. In the current checkpoint chain, narrow
+`attribute_arg_expr` safe subsets have been added for selected non-literal
+`AlignedAttr` and `AssumeAlignedAttr` expressions, but `attribute_arg_type`,
+`attribute_arg_name`, generalized constants, and broad expression families
+remain deferred.
 
 ## Architecture Boundary
 

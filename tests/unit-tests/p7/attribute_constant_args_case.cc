@@ -13,12 +13,7 @@ int p7f_aligned_unsigned() {
   return 64;
 }
 
-[[gnu::aligned(8 + 8)]]
-int p7f_aligned_expr_skipped() {
-  return 8;
-}
-
 int main() {
   return p7f_aligned_direct() + p7f_aligned_paren() +
-         p7f_aligned_unsigned() + p7f_aligned_expr_skipped();
+         p7f_aligned_unsigned();
 }

@@ -16,7 +16,88 @@
 #include <clang/AST/ExprCXX.h>
 #include <memory>
 
+int ExprProcessor::findCachedExprId(const Expr *expr) const {
+  if (!expr || !ast_context_)
+    return -1;
+
+  KeyType exprKey = KeyGen::Expr_::makeKey(expr, ast_context_);
+  if (exprKey.empty())
+    return -1;
+
+  return SEARCH_EXPR_CACHE(exprKey).value_or(-1);
+}
+
+bool ExprProcessor::canProcessExprForReference(const Expr *expr) const {
+  if (!expr || !ast_context_)
+    return false;
+
+  if (expr->getBeginLoc().isInvalid() || expr->getEndLoc().isInvalid())
+    return false;
+
+  if (expr->isTypeDependent() || expr->isValueDependent() ||
+      expr->isInstantiationDependent() || expr->containsUnexpandedParameterPack())
+    return false;
+
+  return llvm::isa<DeclRefExpr, UnaryOperator, BinaryOperator,
+                   ConditionalOperator, StringLiteral, IntegerLiteral,
+                   FloatingLiteral, CharacterLiteral, CXXBoolLiteralExpr,
+                   CallExpr, ImplicitCastExpr, ArraySubscriptExpr, InitListExpr,
+                   UnaryExprOrTypeTraitExpr>(expr);
+}
+
+int ExprProcessor::getOrProcessExprId(const clang::Expr *expr) {
+  if (!canProcessExprForReference(expr))
+    return -1;
+
+  if (int cachedId = findCachedExprId(expr); cachedId != -1)
+    return cachedId;
+
+  if (const auto *declRef = llvm::dyn_cast<DeclRefExpr>(expr)) {
+    processDeclRef(const_cast<DeclRefExpr *>(declRef));
+  } else if (const auto *unary = llvm::dyn_cast<UnaryOperator>(expr)) {
+    processUnaryOperator(unary);
+  } else if (const auto *binary = llvm::dyn_cast<BinaryOperator>(expr)) {
+    processBinaryOperator(binary);
+  } else if (const auto *conditional =
+                 llvm::dyn_cast<ConditionalOperator>(expr)) {
+    processConditionalOperator(conditional);
+  } else if (const auto *stringLiteral =
+                 llvm::dyn_cast<StringLiteral>(expr)) {
+    processStringLiteral(stringLiteral);
+  } else if (const auto *integerLiteral =
+                 llvm::dyn_cast<IntegerLiteral>(expr)) {
+    processIntegerLiteral(integerLiteral);
+  } else if (const auto *floatingLiteral =
+                 llvm::dyn_cast<FloatingLiteral>(expr)) {
+    processFloatingLiteral(floatingLiteral);
+  } else if (const auto *characterLiteral =
+                 llvm::dyn_cast<CharacterLiteral>(expr)) {
+    processCharacterLiteral(characterLiteral);
+  } else if (const auto *boolLiteral =
+                 llvm::dyn_cast<CXXBoolLiteralExpr>(expr)) {
+    processBoolLiteral(boolLiteral);
+  } else if (const auto *callExpr = llvm::dyn_cast<CallExpr>(expr)) {
+    processCallExpr(callExpr);
+  } else if (const auto *implicitCast =
+                 llvm::dyn_cast<ImplicitCastExpr>(expr)) {
+    processImplicitCastExpr(implicitCast);
+  } else if (const auto *arraySubscript =
+                 llvm::dyn_cast<ArraySubscriptExpr>(expr)) {
+    processArraySubscriptExpr(arraySubscript);
+  } else if (const auto *initList = llvm::dyn_cast<InitListExpr>(expr)) {
+    processInitListExpr(initList);
+  } else if (const auto *traitExpr =
+                 llvm::dyn_cast<UnaryExprOrTypeTraitExpr>(expr)) {
+    processUnaryExprOrTypeTraitExpr(traitExpr);
+  }
+
+  return findCachedExprId(expr);
+}
+
 int ExprProcessor::processBaseExpr(Expr *expr, ExprKind exprKind) {
+  if (int cachedId = findCachedExprId(expr); cachedId != -1)
+    return cachedId;
+
   KeyType exprKey = KeyGen::Expr_::makeKey(expr, ast_context_);
   LocIdPair *locIdPair = SrcLocRecorder::processExpr(expr, ast_context_);
 
@@ -29,6 +110,9 @@ int ExprProcessor::processBaseExpr(Expr *expr, ExprKind exprKind) {
 }
 
 void ExprProcessor::processDeclRef(DeclRefExpr *expr) {
+  if (findCachedExprId(expr) != -1)
+    return;
+
   ValueDecl *valueDecl = expr->getDecl();
 
   if (auto *VD = dyn_cast<clang::VarDecl>(valueDecl)) {
@@ -55,6 +139,9 @@ void ExprProcessor::processDeclRef(DeclRefExpr *expr) {
 }
 
 void ExprProcessor::processUnaryOperator(const UnaryOperator *op) {
+  if (findCachedExprId(op) != -1)
+    return;
+
   ExprKind exprType;
   switch (op->getOpcode()) {
   // 1.1.1. 自增/自减运算
@@ -101,6 +188,9 @@ void ExprProcessor::processUnaryOperator(const UnaryOperator *op) {
 }
 
 void ExprProcessor::processBinaryOperator(const BinaryOperator *op) {
+  if (findCachedExprId(op) != -1)
+    return;
+
   ExprKind expr_type = ExprKind::_UNKNOWN_;
 
   switch (op->getOpcode()) {
@@ -197,6 +287,9 @@ void ExprProcessor::processBinaryOperator(const BinaryOperator *op) {
 }
 
 void ExprProcessor::processConditionalOperator(const ConditionalOperator *op) {
+  if (findCachedExprId(op) != -1)
+    return;
+
   processBaseExpr(const_cast<ConditionalOperator *>(op),
                   ExprKind::CONDITIONALEXPR);
   // Traverse(op->getCond());
@@ -327,6 +420,9 @@ void ExprProcessor::processAssignExpr(const BinaryOperator *op) {
 }
 
 void ExprProcessor::processStringLiteral(const StringLiteral *literal) {
+  if (findCachedExprId(literal) != -1)
+    return;
+
   int exprId =
       processBaseExpr(const_cast<StringLiteral *>(literal), ExprKind::LITERAL);
 
@@ -360,6 +456,9 @@ int ExprProcessor::processAttributeIntegerLiteral(
 }
 
 void ExprProcessor::processFloatingLiteral(const FloatingLiteral *literal) {
+  if (findCachedExprId(literal) != -1)
+    return;
+
   int exprId = processBaseExpr(const_cast<FloatingLiteral *>(literal),
                                ExprKind::LITERAL);
 
@@ -372,6 +471,9 @@ void ExprProcessor::processFloatingLiteral(const FloatingLiteral *literal) {
 }
 
 void ExprProcessor::processCharacterLiteral(const CharacterLiteral *literal) {
+  if (findCachedExprId(literal) != -1)
+    return;
+
   int exprId = processBaseExpr(const_cast<CharacterLiteral *>(literal),
                                ExprKind::LITERAL);
 
@@ -383,6 +485,9 @@ void ExprProcessor::processCharacterLiteral(const CharacterLiteral *literal) {
 }
 
 void ExprProcessor::processBoolLiteral(const CXXBoolLiteralExpr *literal) {
+  if (findCachedExprId(literal) != -1)
+    return;
+
   int exprId = processBaseExpr(const_cast<CXXBoolLiteralExpr *>(literal),
                                ExprKind::LITERAL);
 
@@ -422,6 +527,9 @@ void ExprProcessor::recordValueBindExpr(int valueId, int exprId) {
 }
 
 void ExprProcessor::processCallExpr(const CallExpr *expr) {
+  if (findCachedExprId(expr) != -1)
+    return;
+
   int exprId =
       processBaseExpr(const_cast<CallExpr *>(expr), ExprKind::CALLEXPR);
 
@@ -461,6 +569,9 @@ void ExprProcessor::processImplicitCastExpr(const ImplicitCastExpr *ICE) {
   if (!ICE)
     return;
 
+  if (findCachedExprId(ICE) != -1)
+    return;
+
   ExprKind exprKind = ExprKind::NOOPEXPR;
   if (ICE->getCastKind() == CK_ArrayToPointerDecay)
     exprKind = ExprKind::ARRAY_TO_POINTER;
@@ -469,11 +580,17 @@ void ExprProcessor::processImplicitCastExpr(const ImplicitCastExpr *ICE) {
 }
 
 void ExprProcessor::processArraySubscriptExpr(const ArraySubscriptExpr *expr) {
+  if (findCachedExprId(expr) != -1)
+    return;
+
   processBaseExpr(const_cast<ArraySubscriptExpr *>(expr),
                   ExprKind::SUBSCRIPTEXPR);
 }
 
 void ExprProcessor::processInitListExpr(const InitListExpr *expr) {
+  if (findCachedExprId(expr) != -1)
+    return;
+
   int exprId = processBaseExpr(const_cast<InitListExpr *>(expr),
                                ExprKind::BRACED_INIT_LIST);
 
@@ -590,6 +707,9 @@ void ExprProcessor::recordAggregateFieldInit(int initListExprId,
 }
 
 void ExprProcessor::processUnaryExprOrTypeTraitExpr(const UnaryExprOrTypeTraitExpr *expr) {
+  if (findCachedExprId(expr) != -1)
+    return;
+
   UnaryExprOrTypeTrait kind = expr->getKind();
 
   if (kind != UETT_SizeOf && kind != UETT_AlignOf) {

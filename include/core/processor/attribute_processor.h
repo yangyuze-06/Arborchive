@@ -33,10 +33,16 @@ private:
                          clang::SourceLocation loc);
   void recordStringArgument(int attr_id, int index, const std::string &value,
                             clang::SourceLocation loc);
+  void recordAlignedArgument(int attr_id, int index, const clang::Expr *expr);
+  void recordNonLiteralExpressionArgument(int attr_id, int index,
+                                          const clang::Expr *expr);
   void recordIntegerConstantArgument(int attr_id, int index,
                                      const clang::Expr *expr);
+  void recordExpressionArgument(int attr_id, int index,
+                                const clang::Expr *expr);
   const clang::IntegerLiteral *
   getStableIntegerLiteral(const clang::Expr *expr) const;
+  const clang::Expr *getStableNonLiteralExpr(const clang::Expr *expr) const;
 
   int mapAttributeKind(const clang::Attr *attr) const;
   std::string getAttributeName(const clang::Attr *attr) const;
