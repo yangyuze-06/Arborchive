@@ -32,6 +32,9 @@ LLVM_LIBS := $(shell $(LLVM_CONFIG) --libs core 2>/dev/null)
 ifeq ($(origin CXX), default)
 CXX := $(LLVM_BINDIR)/clang++
 endif
+# Canonicalize the selected compiler so embedded Clang discovers resources and
+# the platform SDK relative to the actual LLVM installation.
+CLANG_EXECUTABLE := $(realpath $(firstword $(CXX)))
 CXX_EXISTS := $(shell command -v "$(firstword $(CXX))" >/dev/null 2>&1 && echo yes)
 CXX_VERSION := $(shell $(CXX) --version 2>/dev/null | head -n 1)
 ifneq ($(CHECK_TOOLCHAIN),)
@@ -53,7 +56,8 @@ TOML_CFLAGS ?=
 # ==============================================
 # Compiler and Linker Flags
 # ==============================================
-COMMON_CXXFLAGS = $(CXXFLAGS) $(LLVM_CXXFLAGS) $(SQLITE_CFLAGS) $(TOML_CFLAGS)
+COMMON_CXXFLAGS = $(CXXFLAGS) $(LLVM_CXXFLAGS) $(SQLITE_CFLAGS) $(TOML_CFLAGS) \
+	-DARBORCHIVE_CLANG_EXECUTABLE=\"$(CLANG_EXECUTABLE)\"
 USER_LDFLAGS := $(LDFLAGS)
 LDFLAGS := $(LLVM_LDFLAGS) $(USER_LDFLAGS)
 LDLIBS += -lclang-cpp $(LLVM_LIBS) $(SQLITE_LIBS)
@@ -138,6 +142,7 @@ print-toolchain:
 	@echo "LLVM_CONFIG=$(LLVM_CONFIG)"
 	@echo "LLVM_VERSION=$(LLVM_VERSION)"
 	@echo "LLVM_BINDIR=$(LLVM_BINDIR)"
+	@echo "CLANG_EXECUTABLE=$(CLANG_EXECUTABLE)"
 	@echo "LLVM_LIBDIR=$(LLVM_LIBDIR)"
 	@echo "CXX=$(CXX)"
 	@echo "CXX_VERSION=$(CXX_VERSION)"

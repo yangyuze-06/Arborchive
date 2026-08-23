@@ -51,6 +51,7 @@ public:
 
   bool shouldVisitImplicitCode() const { return true; }
   bool shouldVisitTemplateInstantiations() const { return true; }
+  bool TraverseDecl(clang::Decl *decl);
 
   // 为各种AST节点类型实现Visit方法
 

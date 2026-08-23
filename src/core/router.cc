@@ -7,7 +7,7 @@
 #include "util/logger/macros.h"
 #include <filesystem>
 
-void Router::processCompilation(const Configuration &config) {
+bool Router::processCompilation(const Configuration &config) {
   CompRecorder &recorder = CompRecorder::getInstance();
 
   // 创建编译记录
@@ -32,7 +32,12 @@ void Router::processCompilation(const Configuration &config) {
   HighResTimer extractor_timer;
   extractor_timer.start();
 
-  parseAST(config.general.source_path);
+  if (!parseAST(config.general.source_path)) {
+    LOG_ERROR << "AST parsing failed; dependency resolution and compilation "
+                 "finalization were skipped"
+              << std::endl;
+    return false;
+  }
 
   // Resolve dependencies
   LOG_INFO << "Resolving pending dependencies..." << std::endl;
@@ -47,11 +52,12 @@ void Router::processCompilation(const Configuration &config) {
   // 完成记录
   recorder.finalize(frontend_timer.cpu_time() + extractor_timer.cpu_time(),
                     frontend_timer.elapsed() + extractor_timer.elapsed());
+  return true;
 }
 
-void Router::parseAST(const std::string &source_path) {
+bool Router::parseAST(const std::string &source_path) {
   // 使用C++ API处理AST
-  ClangASTManager::getInstance().processAST(
+  return ClangASTManager::getInstance().processAST(
       source_path,
       [this](clang::ASTContext &context) { // 这里定义具体的AST处理逻辑
         // 创建并运行AST访问者

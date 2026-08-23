@@ -1,10 +1,16 @@
 #include "core/clang_ast_manager.h"
 #include "core/processor/preprocessor_processor.h"
 #include "util/logger/macros.h"
+#include <clang/Driver/Driver.h>
 #include <clang/Frontend/FrontendActions.h>
+#include <clang/Tooling/ArgumentsAdjusters.h>
 #include <clang/Tooling/CompilationDatabase.h>
 #include <clang/Tooling/Tooling.h>
 #include <memory>
+
+#ifndef ARBORCHIVE_CLANG_EXECUTABLE
+#error "ARBORCHIVE_CLANG_EXECUTABLE must name the LLVM 19 clang++ driver"
+#endif
 
 // 创建自定义的clang组件
 class CustomASTConsumer : public clang::ASTConsumer {
@@ -110,6 +116,26 @@ bool ClangASTManager::processAST(
     return false;
   }
   clang::tooling::ClangTool tool(*compdbPtr, {source_path});
+
+  // FixedCompilationDatabase hard-codes argv[0] to "clang-tool". Restore the
+  // LLVM 19 driver used to build Arborchive so Clang can discover its C++
+  // standard library, platform SDK, and builtin resource headers.
+  const std::string clang_executable = ARBORCHIVE_CLANG_EXECUTABLE;
+  const std::string resource_dir =
+      clang::driver::Driver::GetResourcesPath(clang_executable);
+  tool.appendArgumentsAdjuster(
+      [clang_executable, resource_dir](
+          const clang::tooling::CommandLineArguments &arguments,
+          llvm::StringRef) {
+        auto adjusted = arguments;
+        if (adjusted.empty())
+          return adjusted;
+
+        adjusted[0] = clang_executable;
+        adjusted.insert(adjusted.begin() + 1,
+                        "-resource-dir=" + resource_dir);
+        return adjusted;
+      });
 
   // 运行工具并处理AST
   int result = tool.run(new CustomFrontendActionFactory(callback));

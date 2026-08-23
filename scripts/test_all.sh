@@ -12,6 +12,15 @@ CASES=(
   "slight-case"
   "moderate-case"
   "intense-case"
+  "macro/macro_basic"
+  "macro/macro_complex"
+  "macro/macro_func"
+  "preprocessor-simple"
+  "temp"
+  "unit-tests/function/coroutine"
+  "unit-tests/function/template"
+  "unit-tests/function/throw-exceptions"
+  "unit-tests/function/typedef"
   "unit-tests/namespace"
   "unit-tests/p5/hierarchy_case"
   "unit-tests/p5/layout_case"
@@ -70,9 +79,44 @@ mkdir -p "$OUT_DIR"
 echo "[test_all] Building debug target with ${JOBS} jobs"
 env "${MAKE_ENV[@]}" make "${MAKE_ARGS[@]}" debug -j "$JOBS"
 
+TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/arborchive-test-all.XXXXXX")"
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+echo "[test_all] Checking CLI exit behavior"
+"$ROOT_DIR/build/demo" --help >"$TMP_DIR/help.log" 2>&1
+grep -Fq "Usage: arborchive" "$TMP_DIR/help.log"
+"$ROOT_DIR/build/demo" --version >"$TMP_DIR/version.log" 2>&1
+grep -Fq "Arborchive version" "$TMP_DIR/version.log"
+if "$ROOT_DIR/build/demo" --g0-invalid-option >"$TMP_DIR/bogus.log" 2>&1; then
+  echo "[test_all] Invalid CLI option unexpectedly succeeded" >&2
+  exit 1
+fi
+
+printf 'int main( { return 0; }\n' >"$TMP_DIR/invalid.cc"
+if "$ROOT_DIR/build/demo" \
+  -c "$ROOT_DIR/config.example.toml" \
+  -s "$TMP_DIR/invalid.cc" \
+  -o "$TMP_DIR/invalid.db" >"$TMP_DIR/invalid.log" 2>&1; then
+  echo "[test_all] Invalid C++ source unexpectedly succeeded" >&2
+  exit 1
+fi
+invalid_finished="$(python3 - "$TMP_DIR/invalid.db" <<'PY'
+import sqlite3
+import sys
+
+with sqlite3.connect(sys.argv[1]) as connection:
+    print(connection.execute("select count(*) from compilation_finished").fetchone()[0])
+PY
+)"
+if [[ "$invalid_finished" != "0" ]]; then
+  echo "[test_all] Failed parse was incorrectly marked finished" >&2
+  exit 1
+fi
+
 for case_name in "${CASES[@]}"; do
   src="$ROOT_DIR/tests/${case_name}.cc"
   db="$OUT_DIR/${case_name//\//-}.db"
+  log="$TMP_DIR/${case_name//\//-}.log"
 
   if [[ ! -f "$src" ]]; then
     echo "[test_all] Missing test source: $src" >&2
@@ -81,15 +125,27 @@ for case_name in "${CASES[@]}"; do
 
   rm -f "$db"
   echo "[test_all] Running $case_name -> $db"
-  "$ROOT_DIR/build/demo" \
-    -c "$ROOT_DIR/config.example.toml" \
-    -s "$src" \
-    -o "$db"
+  if ! "$ROOT_DIR/build/demo" \
+      -c "$ROOT_DIR/config.example.toml" \
+      -s "$src" \
+      -o "$db" >"$log" 2>&1; then
+    echo "[test_all] Extractor failed for $case_name" >&2
+    tail -80 "$log" >&2
+    exit 1
+  fi
+
+  if grep -Eq "fatal error:|Error while processing|Failed to process AST" "$log"; then
+    echo "[test_all] Fatal Clang diagnostic found for $case_name" >&2
+    grep -E "fatal error:|Error while processing|Failed to process AST" "$log" >&2
+    exit 1
+  fi
 
   if [[ ! -s "$db" ]]; then
     echo "[test_all] Expected non-empty database was not created: $db" >&2
     exit 1
   fi
+
+  "$ROOT_DIR/scripts/assert_test_db.py" "$case_name" "$db"
 
   echo "[test_all] Summary for $case_name"
   "$ROOT_DIR/scripts/db_summary.py" "$db"
