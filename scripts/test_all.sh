@@ -17,6 +17,14 @@ CASES=(
   "unit-tests/p5/layout_case"
   "unit-tests/p5/semantic_gaps_case"
   "unit-tests/p6/lambda_case"
+  "unit-tests/p7/attribute_presence_case"
+  "unit-tests/p7/attribute_arguments_case"
+  "unit-tests/p7/attribute_owner_links_case"
+  "unit-tests/p7/attribute_string_args_case"
+  "unit-tests/p7/attribute_constant_args_case"
+  "unit-tests/p7/attribute_expr_args_case"
+  "unit-tests/p7/attribute_assume_aligned_expr_args_case"
+  "unit-tests/p7/attribute_extra_value_args_case"
 )
 
 if [[ -z "${LLVM_CONFIG:-}" ]]; then

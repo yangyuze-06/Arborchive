@@ -16,6 +16,8 @@ class TypeProcessor;
 
 class ExprProcessor : public BaseProcessor {
 public:
+  int getOrProcessExprId(const clang::Expr *expr);
+
   void processDeclRef(DeclRefExpr *expr);
 
   void processUnaryOperator(const UnaryOperator *op);
@@ -24,6 +26,7 @@ public:
 
   void processStringLiteral(const StringLiteral *literal);
   void processIntegerLiteral(const IntegerLiteral *literal);
+  int processAttributeIntegerLiteral(const IntegerLiteral *literal);
   void processFloatingLiteral(const FloatingLiteral *literal);
   void processCharacterLiteral(const CharacterLiteral *literal);
   void processBoolLiteral(const CXXBoolLiteralExpr *literal);
@@ -53,6 +56,9 @@ private:
   int _varId;
   int _varDeclId;
   std::string _name;
+
+  int findCachedExprId(const Expr *expr) const;
+  bool canProcessExprForReference(const Expr *expr) const;
 
   int processBaseExpr(Expr *expr, ExprKind exprKind);
 

@@ -15,6 +15,9 @@
 
 int StmtProcessor::getStmtId(Stmt *stmt, StmtKind stmtKind) {
   KeyType stmtKey = KeyGen::Stmt_::makeKey(stmt, ast_context_);
+  if (auto cachedId = SEARCH_STMT_CACHE(stmtKey))
+    return *cachedId;
+
   LocIdPair *locIdPair = SrcLocRecorder::processStmt(stmt, ast_context_);
 
   DbModel::Stmt stmtModel = {GENID(Stmt), static_cast<int>(stmtKind),
@@ -25,7 +28,37 @@ int StmtProcessor::getStmtId(Stmt *stmt, StmtKind stmtKind) {
   return stmtModel.id;
 }
 
-void StmtProcessor::processIfStmt(IfStmt *ifStmt) {
+int StmtProcessor::getSupportedAttributedStmtOwnerId(
+    AttributedStmt *attributedStmt) {
+  if (!attributedStmt || !attributedStmt->getSubStmt())
+    return -1;
+
+  Stmt *subStmt = attributedStmt->getSubStmt();
+  if (auto *returnStmt = dyn_cast<ReturnStmt>(subStmt))
+    return processReturnStmt(returnStmt);
+  if (auto *nullStmt = dyn_cast<NullStmt>(subStmt))
+    return processNullStmt(nullStmt);
+  if (auto *compoundStmt = dyn_cast<CompoundStmt>(subStmt))
+    return processBlockStmt(compoundStmt);
+  if (auto *ifStmt = dyn_cast<IfStmt>(subStmt))
+    return processIfStmt(ifStmt);
+  if (auto *forStmt = dyn_cast<ForStmt>(subStmt))
+    return processForStmt(forStmt);
+  if (auto *rangeForStmt = dyn_cast<CXXForRangeStmt>(subStmt))
+    return processCXXForRangeStmt(rangeForStmt);
+  if (auto *whileStmt = dyn_cast<WhileStmt>(subStmt))
+    return processWhileStmt(whileStmt);
+  if (auto *doStmt = dyn_cast<DoStmt>(subStmt))
+    return processDoStmt(doStmt);
+  if (auto *switchStmt = dyn_cast<SwitchStmt>(subStmt))
+    return processSwitchStmt(switchStmt);
+  if (auto *declStmt = dyn_cast<DeclStmt>(subStmt))
+    return processDeclStmt(declStmt);
+
+  return -1;
+}
+
+int StmtProcessor::processIfStmt(IfStmt *ifStmt) {
   int if_stmt_id = getStmtId(ifStmt, StmtKind::IF);
 
   // 1. 处理初始化部分
@@ -81,9 +114,11 @@ void StmtProcessor::processIfStmt(IfStmt *ifStmt) {
       DependencyManager::instance().addDependency(update);
     }
   }
+
+  return if_stmt_id;
 }
 
-void StmtProcessor::processForStmt(ForStmt *forStmt) {
+int StmtProcessor::processForStmt(ForStmt *forStmt) {
   int for_stmt_id = getStmtId(forStmt, StmtKind::FOR);
 
   // int for_or_range_id = GENID(StmtForOrRangeBased);
@@ -162,9 +197,11 @@ void StmtProcessor::processForStmt(ForStmt *forStmt) {
       DependencyManager::instance().addDependency(update);
     }
   }
+
+  return for_stmt_id;
 }
 
-void StmtProcessor::processCXXForRangeStmt(CXXForRangeStmt *rangeForStmt) {
+int StmtProcessor::processCXXForRangeStmt(CXXForRangeStmt *rangeForStmt) {
   int for_stmt_id = getStmtId((Stmt *)rangeForStmt, StmtKind::FOR);
 
   // int for_or_range_id = GENID(StmtForOrRangeBased);
@@ -190,9 +227,11 @@ void StmtProcessor::processCXXForRangeStmt(CXXForRangeStmt *rangeForStmt) {
       DependencyManager::instance().addDependency(update);
     }
   }
+
+  return for_stmt_id;
 }
 
-void StmtProcessor::processWhileStmt(WhileStmt *whileStmt) {
+int StmtProcessor::processWhileStmt(WhileStmt *whileStmt) {
   int while_stmt_id = getStmtId(whileStmt, StmtKind::WHILE);
 
   // 处理循环体
@@ -212,9 +251,11 @@ void StmtProcessor::processWhileStmt(WhileStmt *whileStmt) {
       DependencyManager::instance().addDependency(update);
     }
   }
+
+  return while_stmt_id;
 }
 
-void StmtProcessor::processDoStmt(DoStmt *doStmt) {
+int StmtProcessor::processDoStmt(DoStmt *doStmt) {
   int do_stmt_id = getStmtId(doStmt, StmtKind::END_TEST_WHILE);
 
   // 处理循环体
@@ -234,9 +275,11 @@ void StmtProcessor::processDoStmt(DoStmt *doStmt) {
       DependencyManager::instance().addDependency(update);
     }
   }
+
+  return do_stmt_id;
 }
 
-void StmtProcessor::processSwitchStmt(SwitchStmt *switchStmt) {
+int StmtProcessor::processSwitchStmt(SwitchStmt *switchStmt) {
   int switch_stmt_id = getStmtId(switchStmt, StmtKind::SWITCH);
 
   // 1. 处理初始化部分
@@ -302,18 +345,22 @@ void StmtProcessor::processSwitchStmt(SwitchStmt *switchStmt) {
       }
     }
   }
+
+  return switch_stmt_id;
 }
 
-void StmtProcessor::processBlockStmt(CompoundStmt *blockStmt) {
-  int block_stmt_id = getStmtId(blockStmt, StmtKind::BLOCK);
+int StmtProcessor::processBlockStmt(CompoundStmt *blockStmt) {
+  return getStmtId(blockStmt, StmtKind::BLOCK);
 }
 
-void StmtProcessor::processReturnStmt(ReturnStmt *returnStmt) {
-  // Just call getStmtId to create ReturnStmt record
-  getStmtId(returnStmt, StmtKind::RETURN);
+int StmtProcessor::processReturnStmt(ReturnStmt *returnStmt) {
+  return getStmtId(returnStmt, StmtKind::RETURN);
 }
 
-void StmtProcessor::processDeclStmt(DeclStmt *declStmt) {
-  // Just call getStmtId to create DeclStmt record
-  getStmtId(declStmt, StmtKind::DECL);
+int StmtProcessor::processDeclStmt(DeclStmt *declStmt) {
+  return getStmtId(declStmt, StmtKind::DECL);
+}
+
+int StmtProcessor::processNullStmt(NullStmt *nullStmt) {
+  return getStmtId(nullStmt, StmtKind::EMPTY);
 }

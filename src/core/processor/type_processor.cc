@@ -47,45 +47,62 @@ int TypeProcessor::processType(const Type *T) {
   return _typeId;
 }
 
-void TypeProcessor::processRecordDecl(const RecordDecl *RD) {
-  auto T = RD->getTypeForDecl();
-  if (T) {
-    _typeId = processType(T);
-    processTypeDecl(RD);
-  }
+int TypeProcessor::processRecordDecl(const RecordDecl *RD) {
+  if (!RD || !RD->getTypeForDecl())
+    return -1;
+
+  _typeId = processRecordDeclType(RD);
+  processTypeDecl(RD);
+  return _typeId;
 }
 
-void TypeProcessor::processEnumDecl(const EnumDecl *ED) {
+int TypeProcessor::processEnumDecl(const EnumDecl *ED) {
   auto T = ED->getTypeForDecl();
   if (T) {
     _typeId = processType(T);
     processTypeDecl(ED);
+    return _typeId;
   }
+  return -1;
 }
 
-void TypeProcessor::processTypedefDecl(const TypedefDecl *TND) {
-  std::string typedefName = TND->getNameAsString();
-  LOG_INFO << "Processing TypedefDecl: " << typedefName << std::endl;
+int TypeProcessor::processTypedefDecl(const TypedefDecl *TND) {
+  return processTypedefNameDecl(TND);
+}
 
-  // Create a UserType entry for the typedef
-  int typedefKind = static_cast<int>(UserTypeKind::TYPEDEF);
-  DbModel::UserType userTypeModel = {GENID(UserType), typedefName, typedefKind};
+int TypeProcessor::processTypeAliasDecl(const TypeAliasDecl *TAD) {
+  return processTypedefNameDecl(TAD);
+}
+
+int TypeProcessor::processTypedefNameDecl(const TypedefNameDecl *TND) {
+  if (!TND)
+    return -1;
+
+  LOG_INFO << "Processing TypedefNameDecl: " << TND->getNameAsString()
+           << std::endl;
+
   KeyType userTypeKey = KeyGen::Type::makeKey(TND, ast_context_);
+  if (auto cachedId = SEARCH_TYPE_CACHE(userTypeKey)) {
+    _typeId = *cachedId;
+    processTypeDecl(TND);
+    return _typeId;
+  }
+
+  const int typedefKind =
+      isa<TypeAliasDecl>(TND) ? static_cast<int>(UserTypeKind::USING_ALIAS)
+                              : static_cast<int>(UserTypeKind::TYPEDEF);
+  DbModel::UserType userTypeModel = {GENID(UserType), TND->getNameAsString(),
+                                     typedefKind};
   INSERT_TYPE_CACHE(userTypeKey, userTypeModel.id);
   STG.insertClassObj(userTypeModel);
 
-  // Process the underlying type and create typedef base mapping
-  auto T = TND->getTypeForDecl();
-  if (T) {
-    int underlyingTypeId = processType(T);
-    // Create typedef base mapping
-    DbModel::TypedefBase typedefBase = {userTypeModel.id, underlyingTypeId};
-    STG.insertClassObj(typedefBase);
-    LOG_DEBUG << "Created typedef base: " << typedefName << " -> type_id: " << underlyingTypeId << std::endl;
+  const int underlyingTypeId = processType(TND->getUnderlyingType().getTypePtr());
+  DbModel::TypedefBase typedefBase = {userTypeModel.id, underlyingTypeId};
+  STG.insertClassObj(typedefBase);
 
-    _typeId = processType(T);
-    processTypeDecl(TND);
-  }
+  _typeId = userTypeModel.id;
+  processTypeDecl(TND);
+  return _typeId;
 }
 
 int TypeProcessor::processTemplateTypeParmDecl(

@@ -1,6 +1,7 @@
 #ifndef _AST_VISITOR_H_
 #define _AST_VISITOR_H_
 
+#include "core/processor/attribute_processor.h"
 #include "core/processor/expr_processor.h"
 #include "core/processor/inheritance_processor.h"
 #include "core/processor/lambda_processor.h"
@@ -36,6 +37,7 @@ private:
   std::unique_ptr<TypeProcessor> type_processor_ = nullptr;
   std::unique_ptr<StmtProcessor> stmt_processor_ = nullptr;
   std::unique_ptr<ExprProcessor> expr_processor_ = nullptr;
+  std::unique_ptr<AttributeProcessor> attribute_processor_ = nullptr;
   std::unique_ptr<SpecifierProcessor> specifier_processor_ = nullptr;
   std::unique_ptr<TemplateProcessor> template_processor_ = nullptr;
   std::unique_ptr<InheritanceProcessor> inheritance_processor_ = nullptr;
@@ -75,6 +77,7 @@ public:
   bool VisitRecordType(clang::RecordType *RT);
   bool VisitEnumDecl(clang::EnumDecl *decl);
   bool VisitTypedefDecl(clang::TypedefDecl *decl);
+  bool VisitTypeAliasDecl(clang::TypeAliasDecl *decl);
   bool VisitBuiltinType(clang::BuiltinType *BT);
   bool VisitTemplateTypeParmDecl(clang::TemplateTypeParmDecl *decl);
   bool VisitNonTypeTemplateParmDecl(clang::NonTypeTemplateParmDecl *decl);
@@ -98,6 +101,8 @@ public:
   bool VisitCompoundStmt(clang::CompoundStmt *compoundStmt);
   bool VisitReturnStmt(clang::ReturnStmt *returnStmt);
   bool VisitDeclStmt(clang::DeclStmt *declStmt);
+  bool VisitNullStmt(clang::NullStmt *nullStmt);
+  bool VisitAttributedStmt(clang::AttributedStmt *attributedStmt);
 
   // Expr Family
   bool VisitDeclRefExpr(clang::DeclRefExpr *expr);
