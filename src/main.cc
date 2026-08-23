@@ -7,9 +7,26 @@
 #include "util/logger/macros.h"
 #include <iostream>
 
+namespace {
+
+class LoggerStopGuard {
+public:
+  explicit LoggerStopGuard(Logger &logger) : logger_(logger) {}
+  ~LoggerStopGuard() { logger_.stop(); }
+
+  LoggerStopGuard(const LoggerStopGuard &) = delete;
+  LoggerStopGuard &operator=(const LoggerStopGuard &) = delete;
+
+private:
+  Logger &logger_;
+};
+
+} // namespace
+
 int main(int argc, char *argv[]) {
   auto &logger = Logger::getInstance();
   logger.init();
+  LoggerStopGuard logger_stop_guard(logger);
   try {
 
     auto &cli = Cli::getInstance();
@@ -40,13 +57,11 @@ int main(int argc, char *argv[]) {
 
     // Start parsing process
     Router &router = Router::getInstance();
-    router.processCompilation(configLoader.getConfig());
+    if (!router.processCompilation(configLoader.getConfig()))
+      return 1;
 
-    // Manually stop worker threads
-    logger.stop();
     return 0;
   } catch (const std::exception &e) {
-    logger.stop();
     std::cerr << "Fatal error: " << e.what() << std::endl;
     return 1;
   }

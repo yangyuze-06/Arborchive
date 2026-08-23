@@ -45,6 +45,21 @@ ASTVisitor::ASTVisitor(clang::ASTContext *context)
   pp_.SuppressTagKeyword = true;
 }
 
+bool ASTVisitor::TraverseDecl(clang::Decl *decl) {
+  if (!decl)
+    return true;
+
+  const clang::SourceManager &source_manager = context_->getSourceManager();
+  clang::SourceLocation location =
+      source_manager.getExpansionLoc(decl->getLocation());
+  // Keep system headers available to Clang for type checking, but do not
+  // extract their declaration subtrees into the project database.
+  if (location.isValid() && source_manager.isInSystemHeader(location))
+    return true;
+
+  return clang::RecursiveASTVisitor<ASTVisitor>::TraverseDecl(decl);
+}
+
 void ASTVisitor::initProcessors() {
   function_processor_ = std::make_unique<FunctionProcessor>(context_, pp_);
   namespace_processor_ = std::make_unique<NamespaceProcessor>(context_, pp_);

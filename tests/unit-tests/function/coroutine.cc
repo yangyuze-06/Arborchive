@@ -1,4 +1,5 @@
 #include <coroutine>
+#include <exception>
 
 // 简单的协程返回对象
 struct Generator {

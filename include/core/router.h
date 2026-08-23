@@ -14,13 +14,13 @@ public:
     return instance;
   }
 
-  void processCompilation(const Configuration &config);
+  bool processCompilation(const Configuration &config);
 
 private:
   ~Router() = default;
   Router() = default;
 
-  void parseAST(const std::string &source_path);
+  bool parseAST(const std::string &source_path);
 };
 
 #endif // _ROUTER_H_
