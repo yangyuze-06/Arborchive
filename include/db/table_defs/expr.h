@@ -65,7 +65,9 @@ inline auto aggregatearrayinit() {
       make_column("aggregate", &DbModel::AggregateArrayInit::aggregate),
       make_column("initializer", &DbModel::AggregateArrayInit::initializer),
       make_column("element_index", &DbModel::AggregateArrayInit::element_index),
-      make_column("position", &DbModel::AggregateArrayInit::position));
+      make_column("position", &DbModel::AggregateArrayInit::position),
+      primary_key(&DbModel::AggregateArrayInit::aggregate,
+                  &DbModel::AggregateArrayInit::position));
 }
 
 inline auto aggregatefieldinit() {
@@ -74,7 +76,9 @@ inline auto aggregatefieldinit() {
       make_column("aggregate", &DbModel::AggregateFieldInit::aggregate),
       make_column("initializer", &DbModel::AggregateFieldInit::initializer),
       make_column("field", &DbModel::AggregateFieldInit::field),
-      make_column("position", &DbModel::AggregateFieldInit::position));
+      make_column("position", &DbModel::AggregateFieldInit::position),
+      primary_key(&DbModel::AggregateFieldInit::aggregate,
+                  &DbModel::AggregateFieldInit::position));
 }
 
 inline auto sizeofbind() {

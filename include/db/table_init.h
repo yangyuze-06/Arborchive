@@ -11,6 +11,7 @@
 #include "table_defs/element.h"
 #include "table_defs/expr.h"
 #include "table_defs/function.h"
+#include "table_defs/initialization.h"
 #include "table_defs/lambda.h"
 #include "table_defs/location.h"
 #include "table_defs/preprocessor.h"
@@ -162,6 +163,9 @@ inline auto initStorage(const std::string &path) {
       ExprTableFn::aggregatearrayinit(),
       ExprTableFn::aggregatefieldinit(),
       ExprTableFn::sizeofbind(),
+      // Initialization Tables
+      InitializationTableFn::initialisers(),
+      InitializationTableFn::braced_initialisers(),
       // Lambda Tables
       LambdaTableFn::lambdas(),
       LambdaTableFn::lambda_capture(),

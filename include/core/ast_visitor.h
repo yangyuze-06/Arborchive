@@ -4,6 +4,7 @@
 #include "core/processor/attribute_processor.h"
 #include "core/processor/expr_processor.h"
 #include "core/processor/inheritance_processor.h"
+#include "core/processor/initialization_processor.h"
 #include "core/processor/lambda_processor.h"
 #include "core/processor/function_processor.h"
 #include "core/processor/namespace_processor.h"
@@ -43,6 +44,7 @@ private:
   std::unique_ptr<InheritanceProcessor> inheritance_processor_ = nullptr;
   std::unique_ptr<RecordLayoutProcessor> record_layout_processor_ = nullptr;
   std::unique_ptr<Lambda_Processor> lambda_processor_ = nullptr;
+  std::unique_ptr<InitializationProcessor> initialization_processor_ = nullptr;
 
 public:
   explicit ASTVisitor(clang::ASTContext *context);

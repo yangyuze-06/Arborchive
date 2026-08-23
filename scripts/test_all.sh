@@ -25,6 +25,7 @@ CASES=(
   "unit-tests/p7/attribute_expr_args_case"
   "unit-tests/p7/attribute_assume_aligned_expr_args_case"
   "unit-tests/p7/attribute_extra_value_args_case"
+  "unit-tests/p8/initialization_case"
 )
 
 if [[ -z "${LLVM_CONFIG:-}" ]]; then
