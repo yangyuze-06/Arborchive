@@ -815,14 +815,12 @@ void TemplateProcessor::processFunctionTemplateSpecialization(
           STG.insertClassObj(instantiation);
         }
       } else {
+        // Dependency callbacks run after ASTVisitor and its processors are
+        // destroyed. Capture only stable values; the table's primary key
+        // keeps this update idempotent.
         PendingUpdate update{
             templateKey, CacheType::FUNCTION,
-            [specializationId,
-             templateProcessor = this](int resolvedId) {
-              if (!templateProcessor->shouldInsertFunctionInstantiation(
-                      specializationId, resolvedId))
-                return;
-
+            [specializationId](int resolvedId) {
               DbModel::FunctionInstantiation instantiation = {
                   specializationId, resolvedId};
               STG.insertClassObj(instantiation);
