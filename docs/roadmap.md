@@ -181,6 +181,17 @@ P7 先抽取 attribute presence graph，再处理 argument system。presence 与
 - Focus: constexpr flow graph，复用并扩展既有 `if_then` / `if_else` 逻辑
 - Complexity: Low
 - Value: low-risk / high-value phase，适合作为控制流 extractor 的稳定增量。
+- Status: DONE
+- Implemented scope: ordinary / constexpr / consteval / negated consteval
+  `IfStmt` classification, CodeQL-aligned relationship tables, and statement
+  dependency reuse for initializer, then, and else children, including
+  declaration and expression init-statements.
+- Validation: `tests/unit-tests/p9/constexpr_flow_case.cc` is parsed as C++23
+  and checked by `scripts/test_all.sh` with SQLite schema, kind, uniqueness, and
+  reference assertions.
+- Migration: the historical `if_initalization` output table was replaced by
+  the CodeQL-compatible `if_initialization` spelling; old databases must be
+  regenerated.
 
 ### P10: Expression Graph Core
 

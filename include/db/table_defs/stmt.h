@@ -17,9 +17,9 @@ inline auto stmts() {
       make_column("location", &DbModel::Stmt::location));
 }
 
-inline auto if_initalization() {
+inline auto if_initialization() {
   return make_table(
-      "if_initalization",
+      "if_initialization",
       make_column("if_stmt", &DbModel::IfInit::if_stmt, primary_key()),
       make_column("init_id", &DbModel::IfInit::init_id));
 }
@@ -36,6 +36,46 @@ inline auto if_else() {
       "if_else",
       make_column("if_stmt", &DbModel::IfElse::if_stmt, primary_key()),
       make_column("then_id", &DbModel::IfElse::else_id));
+}
+
+inline auto constexpr_if_initialization() {
+  return make_table(
+      "constexpr_if_initialization",
+      make_column("constexpr_if_stmt",
+                  &DbModel::ConstexprIfInit::constexpr_if_stmt, primary_key()),
+      make_column("init_id", &DbModel::ConstexprIfInit::init_id));
+}
+
+inline auto constexpr_if_then() {
+  return make_table(
+      "constexpr_if_then",
+      make_column("constexpr_if_stmt",
+                  &DbModel::ConstexprIfThen::constexpr_if_stmt, primary_key()),
+      make_column("then_id", &DbModel::ConstexprIfThen::then_id));
+}
+
+inline auto constexpr_if_else() {
+  return make_table(
+      "constexpr_if_else",
+      make_column("constexpr_if_stmt",
+                  &DbModel::ConstexprIfElse::constexpr_if_stmt, primary_key()),
+      make_column("else_id", &DbModel::ConstexprIfElse::else_id));
+}
+
+inline auto consteval_if_then() {
+  return make_table(
+      "consteval_if_then",
+      make_column("constexpr_if_stmt",
+                  &DbModel::ConstevalIfThen::constexpr_if_stmt, primary_key()),
+      make_column("then_id", &DbModel::ConstevalIfThen::then_id));
+}
+
+inline auto consteval_if_else() {
+  return make_table(
+      "consteval_if_else",
+      make_column("constexpr_if_stmt",
+                  &DbModel::ConstevalIfElse::constexpr_if_stmt, primary_key()),
+      make_column("else_id", &DbModel::ConstevalIfElse::else_id));
 }
 
 // inline auto stmt_for_or_range_based_for() {
