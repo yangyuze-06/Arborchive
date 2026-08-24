@@ -35,6 +35,7 @@ CASES=(
   "unit-tests/p7/attribute_assume_aligned_expr_args_case"
   "unit-tests/p7/attribute_extra_value_args_case"
   "unit-tests/p8/initialization_case"
+  "unit-tests/p9/constexpr_flow_case"
 )
 
 if [[ -z "${LLVM_CONFIG:-}" ]]; then
@@ -117,6 +118,11 @@ for case_name in "${CASES[@]}"; do
   src="$ROOT_DIR/tests/${case_name}.cc"
   db="$OUT_DIR/${case_name//\//-}.db"
   log="$TMP_DIR/${case_name//\//-}.log"
+  config="$ROOT_DIR/config.example.toml"
+
+  if [[ "$case_name" == "unit-tests/p9/constexpr_flow_case" ]]; then
+    config="$ROOT_DIR/tests/config.cxx23.toml"
+  fi
 
   if [[ ! -f "$src" ]]; then
     echo "[test_all] Missing test source: $src" >&2
@@ -126,7 +132,7 @@ for case_name in "${CASES[@]}"; do
   rm -f "$db"
   echo "[test_all] Running $case_name -> $db"
   if ! "$ROOT_DIR/build/demo" \
-      -c "$ROOT_DIR/config.example.toml" \
+      -c "$config" \
       -s "$src" \
       -o "$db" >"$log" 2>&1; then
     echo "[test_all] Extractor failed for $case_name" >&2

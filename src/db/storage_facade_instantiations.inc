@@ -30,6 +30,11 @@ template void StorageFacade::insertClassObj<DbModel::ConceptInstantiation&>(DbMo
 template void StorageFacade::insertClassObj<DbModel::ConceptTemplate&>(DbModel::ConceptTemplate&);
 template void StorageFacade::insertClassObj<DbModel::ConceptTemplateArgument&>(DbModel::ConceptTemplateArgument&);
 template void StorageFacade::insertClassObj<DbModel::ConceptTemplateArgumentValue&>(DbModel::ConceptTemplateArgumentValue&);
+template void StorageFacade::insertClassObj<DbModel::ConstevalIfElse&>(DbModel::ConstevalIfElse&);
+template void StorageFacade::insertClassObj<DbModel::ConstevalIfThen&>(DbModel::ConstevalIfThen&);
+template void StorageFacade::insertClassObj<DbModel::ConstexprIfElse&>(DbModel::ConstexprIfElse&);
+template void StorageFacade::insertClassObj<DbModel::ConstexprIfInit&>(DbModel::ConstexprIfInit&);
+template void StorageFacade::insertClassObj<DbModel::ConstexprIfThen&>(DbModel::ConstexprIfThen&);
 template void StorageFacade::insertClassObj<DbModel::Container&>(DbModel::Container&);
 template void StorageFacade::insertClassObj<DbModel::Coroutine&>(DbModel::Coroutine&);
 template void StorageFacade::insertClassObj<DbModel::CoroutineDelete&>(DbModel::CoroutineDelete&);

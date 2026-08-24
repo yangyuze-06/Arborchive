@@ -9,9 +9,60 @@
 #include "util/key_generator/variable.h"
 #include "util/logger/macros.h"
 #include <clang/AST/Decl.h>
+#include <clang/AST/Expr.h>
 #include <clang/AST/Stmt.h>
 #include <clang/AST/StmtCXX.h>
 #include <clang/Basic/LLVM.h>
+
+namespace {
+
+template <typename RelationModel>
+void insertStmtRelation(int ownerId, Stmt *child, ASTContext *astContext) {
+  if (auto *expr = llvm::dyn_cast<Expr>(child)) {
+    KeyType stmtKey = KeyGen::Stmt_::makeKey(child, astContext);
+    LocIdPair *locIdPair = SrcLocRecorder::processStmt(child, astContext);
+
+    auto materializeExprStmt = [ownerId, stmtKey,
+                                locationId = locIdPair->spec_id](int exprId) {
+      DbModel::Stmt stmtModel = {exprId, static_cast<int>(StmtKind::EXPR),
+                                 locationId};
+      INSERT_STMT_CACHE(stmtKey, exprId);
+      STG.insertClassObj(stmtModel);
+
+      RelationModel relation = {ownerId, exprId};
+      STG.insertClassObj(relation);
+    };
+
+    KeyType exprKey = KeyGen::Expr_::makeKey(expr, astContext);
+    if (auto cachedId = SEARCH_EXPR_CACHE(exprKey)) {
+      materializeExprStmt(*cachedId);
+      return;
+    }
+
+    RelationModel unresolvedRelation = {ownerId, -1};
+    STG.insertClassObj(unresolvedRelation);
+    PendingUpdate update{exprKey, CacheType::EXPR, materializeExprStmt};
+    DependencyManager::instance().addDependency(update);
+    return;
+  }
+
+  KeyType stmtKey = KeyGen::Stmt_::makeKey(child, astContext);
+  if (auto cachedId = SEARCH_STMT_CACHE(stmtKey)) {
+    RelationModel relation = {ownerId, *cachedId};
+    STG.insertClassObj(relation);
+    return;
+  }
+
+  RelationModel unresolvedRelation = {ownerId, -1};
+  STG.insertClassObj(unresolvedRelation);
+  PendingUpdate update{stmtKey, CacheType::STMT, [ownerId](int resolvedId) {
+                         RelationModel resolvedRelation = {ownerId, resolvedId};
+                         STG.insertClassObj(resolvedRelation);
+                       }};
+  DependencyManager::instance().addDependency(update);
+}
+
+} // namespace
 
 int StmtProcessor::getStmtId(Stmt *stmt, StmtKind stmtKind) {
   KeyType stmtKey = KeyGen::Stmt_::makeKey(stmt, ast_context_);
@@ -59,60 +110,49 @@ int StmtProcessor::getSupportedAttributedStmtOwnerId(
 }
 
 int StmtProcessor::processIfStmt(IfStmt *ifStmt) {
-  int if_stmt_id = getStmtId(ifStmt, StmtKind::IF);
-
-  // 1. 处理初始化部分
-  if (Stmt *init = ifStmt->getInit()) {
-    KeyType stmtKey = KeyGen::Stmt_::makeKey(init, ast_context_);
-    if (auto cachedId = SEARCH_STMT_CACHE(stmtKey)) {
-      DbModel::IfInit ifInitModel = {if_stmt_id, *cachedId};
-      STG.insertClassObj(ifInitModel);
-    } else {
-      DbModel::IfInit ifInitModel = {if_stmt_id, -1};
-      STG.insertClassObj(ifInitModel);
-      PendingUpdate update{
-          stmtKey, CacheType::STMT, [if_stmt_id](int resolvedId) {
-            DbModel::IfInit updated_record = {if_stmt_id, resolvedId};
-            STG.insertClassObj(updated_record);
-          }};
-      DependencyManager::instance().addDependency(update);
-    }
+  IfStatementKind statementKind = ifStmt->getStatementKind();
+  StmtKind stmtKind = StmtKind::IF;
+  switch (statementKind) {
+  case IfStatementKind::Ordinary:
+    stmtKind = StmtKind::IF;
+    break;
+  case IfStatementKind::Constexpr:
+    stmtKind = StmtKind::CONSTEXPR_IF;
+    break;
+  case IfStatementKind::ConstevalNonNegated:
+    stmtKind = StmtKind::CONSTEVAL_IF;
+    break;
+  case IfStatementKind::ConstevalNegated:
+    stmtKind = StmtKind::NOT_CONSTEVAL_IF;
+    break;
   }
 
-  // 2. 处理then部分
-  if (Stmt *then = ifStmt->getThen()) {
-    KeyType stmtKey = KeyGen::Stmt_::makeKey(then, ast_context_);
-    if (auto cachedId = SEARCH_STMT_CACHE(stmtKey)) {
-      DbModel::IfThen ifThenModel = {if_stmt_id, *cachedId};
-      STG.insertClassObj(ifThenModel);
-    } else {
-      DbModel::IfThen ifThenModel = {if_stmt_id, -1};
-      STG.insertClassObj(ifThenModel);
-      PendingUpdate update{
-          stmtKey, CacheType::STMT, [if_stmt_id](int resolvedId) {
-            DbModel::IfThen updated_record = {if_stmt_id, resolvedId};
-            STG.insertClassObj(updated_record);
-          }};
-      DependencyManager::instance().addDependency(update);
-    }
-  }
+  int if_stmt_id = getStmtId(ifStmt, stmtKind);
 
-  // 3. 处理else部分
-  if (Stmt *elseStmt = ifStmt->getElse()) {
-    KeyType stmtKey = KeyGen::Stmt_::makeKey(elseStmt, ast_context_);
-    if (auto cachedId = SEARCH_STMT_CACHE(stmtKey)) {
-      DbModel::IfElse ifElseModel = {if_stmt_id, *cachedId};
-      STG.insertClassObj(ifElseModel);
-    } else {
-      DbModel::IfElse ifElseModel = {if_stmt_id, -1};
-      STG.insertClassObj(ifElseModel);
-      PendingUpdate update{
-          stmtKey, CacheType::STMT, [if_stmt_id](int resolvedId) {
-            DbModel::IfElse updated_record = {if_stmt_id, resolvedId};
-            STG.insertClassObj(updated_record);
-          }};
-      DependencyManager::instance().addDependency(update);
-    }
+  if (statementKind == IfStatementKind::Ordinary) {
+    if (Stmt *init = ifStmt->getInit())
+      insertStmtRelation<DbModel::IfInit>(if_stmt_id, init, ast_context_);
+    if (Stmt *then = ifStmt->getThen())
+      insertStmtRelation<DbModel::IfThen>(if_stmt_id, then, ast_context_);
+    if (Stmt *elseStmt = ifStmt->getElse())
+      insertStmtRelation<DbModel::IfElse>(if_stmt_id, elseStmt, ast_context_);
+  } else if (statementKind == IfStatementKind::Constexpr) {
+    if (Stmt *init = ifStmt->getInit())
+      insertStmtRelation<DbModel::ConstexprIfInit>(if_stmt_id, init,
+                                                   ast_context_);
+    if (Stmt *then = ifStmt->getThen())
+      insertStmtRelation<DbModel::ConstexprIfThen>(if_stmt_id, then,
+                                                   ast_context_);
+    if (Stmt *elseStmt = ifStmt->getElse())
+      insertStmtRelation<DbModel::ConstexprIfElse>(if_stmt_id, elseStmt,
+                                                   ast_context_);
+  } else {
+    if (Stmt *then = ifStmt->getThen())
+      insertStmtRelation<DbModel::ConstevalIfThen>(if_stmt_id, then,
+                                                   ast_context_);
+    if (Stmt *elseStmt = ifStmt->getElse())
+      insertStmtRelation<DbModel::ConstevalIfElse>(if_stmt_id, elseStmt,
+                                                   ast_context_);
   }
 
   return if_stmt_id;

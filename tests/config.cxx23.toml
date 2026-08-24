@@ -1,0 +1,28 @@
+[general]
+source_path = "tests/unit-tests/p9/constexpr_flow_case.cc"
+output_path = "tests/output/unit-tests-p9-constexpr_flow_case.db"
+
+[compilation]
+include_paths = []
+defines = []
+cxx_standard = "c++23"
+flags = [
+    "-fexceptions",
+    "-fcoroutines",
+    "-Wno-deprecated",
+    "-O0"
+]
+
+[database]
+path = "tests/output/unit-tests-p9-constexpr_flow_case.db"
+batch_size = 10
+cache_size_mb = 64
+journal_mode = "WAL"
+synchronous = "NORMAL"
+
+[logging]
+level = "DEBUG"
+file = ""
+is_to_console = true
+batch_size = 5
+enable_perf_logging = false

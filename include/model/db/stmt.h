@@ -59,6 +59,31 @@ struct IfElse {
   int else_id;
 };
 
+struct ConstexprIfInit {
+  int constexpr_if_stmt;
+  int init_id;
+};
+
+struct ConstexprIfThen {
+  int constexpr_if_stmt;
+  int then_id;
+};
+
+struct ConstexprIfElse {
+  int constexpr_if_stmt;
+  int else_id;
+};
+
+struct ConstevalIfThen {
+  int constexpr_if_stmt;
+  int then_id;
+};
+
+struct ConstevalIfElse {
+  int constexpr_if_stmt;
+  int else_id;
+};
+
 struct ForInit {
   int for_stmt;
   int init_id;
