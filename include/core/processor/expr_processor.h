@@ -9,6 +9,7 @@
 #include <clang/AST/ExprConcepts.h>
 #include <clang/AST/ExprCXX.h>
 #include <clang/AST/Stmt.h>
+#include <unordered_set>
 
 using namespace clang;
 
@@ -17,6 +18,13 @@ class TypeProcessor;
 class ExprProcessor : public BaseProcessor {
 public:
   int getOrProcessExprId(const clang::Expr *expr);
+  int getOrProcessMainTreeExprId(const clang::Expr *expr);
+
+  // Record a CodeQL main-expression-tree edge. Parent ids are stable ids from
+  // an existing @expr, @stmt, or @initialiser row.
+  void recordExprParent(const clang::Expr *child, int childIndex,
+                        int parentId);
+  void recordExprParentId(int childId, int childIndex, int parentId);
 
   void processDeclRef(DeclRefExpr *expr);
 
@@ -69,6 +77,11 @@ private:
   void recordAggregateArrayInit(int initListExprId, const InitListExpr *expr);
   void recordAggregateFieldInit(int initListExprId, const InitListExpr *expr);
   void recordSizeOfBind(int exprId, const UnaryExprOrTypeTraitExpr *expr);
+
+  const clang::Expr *normalizeMainTreeExpr(const clang::Expr *expr) const;
+  void recordCallChildren(const CallExpr *expr, int parentId);
+
+  std::unordered_set<std::string> recorded_parent_edges_;
 
   TypeProcessor *type_processor_ = nullptr;
 };

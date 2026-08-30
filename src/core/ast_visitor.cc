@@ -65,8 +65,9 @@ void ASTVisitor::initProcessors() {
   namespace_processor_ = std::make_unique<NamespaceProcessor>(context_, pp_);
   variable_processor_ = std::make_unique<VariableProcessor>(context_, pp_);
   type_processor_ = std::make_unique<TypeProcessor>(context_, pp_);
-  stmt_processor_ = std::make_unique<StmtProcessor>(context_, pp_);
   expr_processor_ = std::make_unique<ExprProcessor>(context_, pp_, type_processor_.get());
+  stmt_processor_ =
+      std::make_unique<StmtProcessor>(context_, pp_, expr_processor_.get());
   attribute_processor_ =
       std::make_unique<AttributeProcessor>(context_, pp_, expr_processor_.get());
   specifier_processor_ = std::make_unique<SpecifierProcessor>(context_, pp_);
@@ -80,7 +81,8 @@ void ASTVisitor::initProcessors() {
   lambda_processor_ = std::make_unique<Lambda_Processor>(
       context_, pp_, type_processor_.get(), variable_processor_.get());
   initialization_processor_ =
-      std::make_unique<InitializationProcessor>(context_, pp_);
+      std::make_unique<InitializationProcessor>(context_, pp_,
+                                                expr_processor_.get());
 }
 
 // 实现各种Visit方法

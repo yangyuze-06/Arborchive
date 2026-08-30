@@ -7,11 +7,14 @@
 #include <string>
 #include <unordered_set>
 
+class ExprProcessor;
+
 class InitializationProcessor : public BaseProcessor {
 public:
   InitializationProcessor(clang::ASTContext *ast_context,
-                          const clang::PrintingPolicy pp)
-      : BaseProcessor(ast_context, pp) {}
+                          const clang::PrintingPolicy pp,
+                          ExprProcessor *expr_processor = nullptr)
+      : BaseProcessor(ast_context, pp), expr_processor_(expr_processor) {}
   ~InitializationProcessor() = default;
 
   void processVarDeclInitializer(const clang::VarDecl *decl);
@@ -26,6 +29,7 @@ private:
   void recordBracedInitialiser(int initId) const;
 
   std::unordered_set<std::string> processed_initializers_;
+  ExprProcessor *expr_processor_ = nullptr;
 };
 
 #endif // _INITIALIZATION_PROCESSOR_H_

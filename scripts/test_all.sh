@@ -36,6 +36,7 @@ CASES=(
   "unit-tests/p7/attribute_extra_value_args_case"
   "unit-tests/p8/initialization_case"
   "unit-tests/p9/constexpr_flow_case"
+  "unit-tests/p10/expression_graph_case"
 )
 
 if [[ -z "${LLVM_CONFIG:-}" ]]; then

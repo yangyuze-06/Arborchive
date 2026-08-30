@@ -9,6 +9,8 @@
 
 using namespace clang;
 
+class ExprProcessor;
+
 class StmtProcessor : public BaseProcessor {
 public:
   int getStmtId(Stmt *stmt, StmtKind stmtKind);
@@ -26,8 +28,9 @@ public:
   int processDeclStmt(DeclStmt *declStmt);
   int processNullStmt(NullStmt *nullStmt);
 
-  StmtProcessor(ASTContext *ast_context, const PrintingPolicy pp)
-      : BaseProcessor(ast_context, pp) {};
+  StmtProcessor(ASTContext *ast_context, const PrintingPolicy pp,
+                ExprProcessor *expr_processor = nullptr)
+      : BaseProcessor(ast_context, pp), expr_processor_(expr_processor) {};
   ~StmtProcessor() = default;
 
 private:
@@ -35,6 +38,7 @@ private:
   int _varId;
   int _varDeclId;
   std::string _name;
+  ExprProcessor *expr_processor_ = nullptr;
 };
 
 #endif // _STMT_PROCESSOR_H_

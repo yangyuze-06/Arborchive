@@ -663,6 +663,255 @@ def check_p9(audit: Audit) -> None:
         )
 
 
+def check_p10(audit: Audit) -> None:
+    check_count(audit, "exprparents", 69)
+    audit.check_columns("exprparents", ["expr_id", "child_index", "parent_id"])
+    audit.check(
+        "exprparents child orphans",
+        """
+        select count(*) from exprparents relation
+        left join exprs child on child.id=relation.expr_id
+        where child.id is null or relation.expr_id < 0
+        """,
+        0,
+    )
+    audit.check(
+        "exprparents parent orphans",
+        """
+        select count(*) from exprparents relation
+        left join exprs expression on expression.id=relation.parent_id
+        left join stmts statement on statement.id=relation.parent_id
+        left join initialisers initialiser on initialiser.init=relation.parent_id
+        where relation.parent_id < 0
+           or (expression.id is null and statement.id is null
+               and initialiser.init is null)
+        """,
+        0,
+    )
+    audit.check(
+        "exprparents duplicate relations",
+        """
+        select count(*) from (
+          select expr_id, child_index, parent_id
+          from exprparents
+          group by expr_id, child_index, parent_id
+          having count(*) > 1
+        )
+        """,
+        0,
+    )
+    audit.check(
+        "exprparents child has one main parent",
+        """
+        select count(*) from (
+          select expr_id from exprparents group by expr_id having count(*) > 1
+        )
+        """,
+        0,
+    )
+    audit.check(
+        "expression-parent self loops",
+        """
+        select count(*) from exprparents relation
+        join exprs parent on parent.id=relation.parent_id
+        left join stmts expression_statement
+          on expression_statement.id=relation.parent_id
+         and expression_statement.kind=1
+        where relation.expr_id=relation.parent_id
+          and expression_statement.id is null
+        """,
+        0,
+    )
+    audit.check(
+        "conversion nodes excluded from main graph",
+        """
+        select count(*) from exprparents relation
+        join exprs child on child.id=relation.expr_id
+        left join exprs parent on parent.id=relation.parent_id
+        where child.kind in (3,5,8,12,210,211,212,213,214,217)
+           or parent.kind in (3,5,8,12,210,211,212,213,214,217)
+        """,
+        0,
+    )
+    audit.check(
+        "conditional child indices",
+        """
+        select count(*) from (
+          select relation.parent_id
+          from exprparents relation
+          join exprs parent on parent.id=relation.parent_id
+          where parent.kind=24
+          group by relation.parent_id
+          having count(*)=3 and count(distinct relation.child_index)=3
+             and min(relation.child_index)=0 and max(relation.child_index)=2
+        )
+        """,
+        1,
+    )
+    audit.check(
+        "unary child index",
+        """
+        select count(*) from exprparents relation
+        join exprs parent on parent.id=relation.parent_id
+        where parent.kind in (22,23) and relation.child_index=0
+          and relation.expr_id<>relation.parent_id
+        """,
+        3,
+    )
+    audit.check(
+        "binary child indices",
+        """
+        select count(*) from (
+          select relation.parent_id
+          from exprparents relation
+          join exprs parent on parent.id=relation.parent_id
+          where parent.kind in (25,27,46,47,52,53)
+            and relation.expr_id<>relation.parent_id
+          group by relation.parent_id
+          having min(relation.child_index)=0 and max(relation.child_index)=1
+             and count(*)=2
+        )
+        """,
+        13,
+    )
+    audit.check(
+        "array child indices",
+        """
+        select count(*) from (
+          select relation.parent_id
+          from exprparents relation
+          join exprs parent on parent.id=relation.parent_id
+          where parent.kind=68
+          group by relation.parent_id
+          having min(relation.child_index)=0 and max(relation.child_index)=1
+             and count(*)=2
+        )
+        """,
+        3,
+    )
+    audit.check(
+        "init-list child indices",
+        """
+        select count(*) from exprparents relation
+        join exprs parent on parent.id=relation.parent_id
+        where parent.kind=91 and relation.child_index in (0,1)
+        """,
+        2,
+    )
+    audit.check(
+        "sizeof expression child index",
+        """
+        select count(*) from exprparents relation
+        join exprs parent on parent.id=relation.parent_id
+        where parent.kind=93 and relation.child_index=0
+        """,
+        1,
+    )
+    audit.check(
+        "direct call argument index",
+        """
+        select count(*) from (
+          select relation.parent_id
+          from exprparents relation
+          join exprs parent on parent.id=relation.parent_id
+          where parent.kind=74 and relation.expr_id<>relation.parent_id
+          group by relation.parent_id
+          having min(relation.child_index)=0 and max(relation.child_index)=0
+             and count(*)=1
+        )
+        """,
+        3,
+    )
+    audit.check(
+        "indirect call child indices",
+        """
+        select count(*) from (
+          select relation.parent_id
+          from exprparents relation
+          join exprs parent on parent.id=relation.parent_id
+          where parent.kind=74 and relation.expr_id<>relation.parent_id
+          group by relation.parent_id
+          having min(relation.child_index)=0 and max(relation.child_index)=1
+             and count(*)=2
+        )
+        """,
+        1,
+    )
+    audit.check(
+        "member call qualifier index",
+        """
+        select count(*) from (
+          select relation.parent_id
+          from exprparents relation
+          join exprs parent on parent.id=relation.parent_id
+          where parent.kind=74 and relation.expr_id<>relation.parent_id
+          group by relation.parent_id
+          having min(relation.child_index)=-1 and max(relation.child_index)=0
+             and count(*)=2
+        )
+        """,
+        1,
+    )
+    for label, statement_kind, child_index in (
+        ("if condition index", 2, 1),
+        ("while condition index", 3, 0),
+        ("do condition index", 8, 0),
+        ("switch condition index", 11, 1),
+        ("return expression index", 6, 0),
+    ):
+        audit.check(
+            label,
+            f"""
+            select count(*) from exprparents relation
+            join stmts parent on parent.id=relation.parent_id
+            where parent.kind={statement_kind}
+              and relation.child_index={child_index}
+            """,
+            1 if statement_kind not in (6,) else 3,
+        )
+    audit.check(
+        "for condition and update indices",
+        """
+        select count(*) from exprparents relation
+        join stmts parent on parent.id=relation.parent_id
+        where parent.kind=9 and relation.child_index in (1,2)
+        """,
+        2,
+    )
+    audit.check(
+        "expression statement roots",
+        """
+        select count(*) from exprparents relation
+        join stmts parent on parent.id=relation.parent_id
+        where parent.kind=1 and relation.child_index=0
+          and relation.expr_id=relation.parent_id
+        """,
+        7,
+    )
+    audit.check(
+        "parenthesized expression statement normalized",
+        """
+        select count(*) from exprparents relation
+        join stmts parent on parent.id=relation.parent_id
+        join exprs child on child.id=relation.expr_id
+        where parent.kind=1 and child.kind=84
+          and relation.child_index=0
+          and relation.expr_id=relation.parent_id
+        """,
+        1,
+    )
+    audit.check(
+        "initialiser roots",
+        """
+        select count(*) from exprparents relation
+        join initialisers parent
+          on parent.init=relation.parent_id and parent.expr=relation.expr_id
+        where relation.child_index=0
+        """,
+        5,
+    )
+
+
 def run(case: str, database: Path) -> int:
     audit = Audit(case, database)
     try:
@@ -679,6 +928,8 @@ def run(case: str, database: Path) -> int:
             check_p8(audit)
         elif case == "unit-tests/p9/constexpr_flow_case":
             check_p9(audit)
+        elif case == "unit-tests/p10/expression_graph_case":
+            check_p10(audit)
         else:
             audit.warn_if_positive(
                 "known non-P8 initialiser expression placeholders",
