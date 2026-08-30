@@ -49,6 +49,7 @@ template void StorageFacade::insertClassObj<DbModel::DirectBaseOffset&>(DbModel:
 template void StorageFacade::insertClassObj<DbModel::DoBody&>(DbModel::DoBody&);
 template void StorageFacade::insertClassObj<DbModel::EnumConstant&>(DbModel::EnumConstant&);
 template void StorageFacade::insertClassObj<DbModel::Expr&>(DbModel::Expr&);
+template void StorageFacade::insertClassObj<DbModel::ExprParent&>(DbModel::ExprParent&);
 template void StorageFacade::insertClassObj<DbModel::FieldOffset&>(DbModel::FieldOffset&);
 template void StorageFacade::insertClassObj<DbModel::File&>(DbModel::File&);
 template void StorageFacade::insertClassObj<DbModel::Folder&>(DbModel::Folder&);

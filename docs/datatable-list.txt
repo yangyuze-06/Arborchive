@@ -153,7 +153,7 @@ DONE  144. frienddecls
 DONE   150. namespaces
 DONE   151. namespace_inline
 DONE   152. namespacembrs
-  153. exprparents
+DONE   153. exprparents
   154. expr_isload
   155. conversionkinds
 DONE   156. iscall

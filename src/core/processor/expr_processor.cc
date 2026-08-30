@@ -94,6 +94,67 @@ int ExprProcessor::getOrProcessExprId(const clang::Expr *expr) {
   return findCachedExprId(expr);
 }
 
+const clang::Expr *
+ExprProcessor::normalizeMainTreeExpr(const clang::Expr *expr) const {
+  if (!expr)
+    return nullptr;
+
+  // CodeQL keeps conversions (including parentheses) outside the main
+  // expression tree. P11 will model those through exprconv.
+  return expr->IgnoreParenCasts();
+}
+
+int ExprProcessor::getOrProcessMainTreeExprId(const clang::Expr *expr) {
+  return getOrProcessExprId(normalizeMainTreeExpr(expr));
+}
+
+void ExprProcessor::recordExprParent(const clang::Expr *child, int childIndex,
+                                     int parentId) {
+  if (parentId < 0)
+    return;
+
+  const int childId = getOrProcessMainTreeExprId(child);
+  if (childId < 0)
+    return;
+
+  recordExprParentId(childId, childIndex, parentId);
+}
+
+void ExprProcessor::recordExprParentId(int childId, int childIndex,
+                                       int parentId) {
+  if (childId < 0 || parentId < 0)
+    return;
+
+  const std::string edgeKey = std::to_string(childId) + ":" +
+                              std::to_string(childIndex) + ":" +
+                              std::to_string(parentId);
+  if (!recorded_parent_edges_.insert(edgeKey).second)
+    return;
+
+  DbModel::ExprParent parentModel = {childId, childIndex, parentId};
+  STG.insertClassObj(parentModel);
+}
+
+void ExprProcessor::recordCallChildren(const CallExpr *expr, int parentId) {
+  if (!expr || parentId < 0)
+    return;
+
+  if (expr->getDirectCallee()) {
+    if (const auto *memberCall = llvm::dyn_cast<CXXMemberCallExpr>(expr)) {
+      recordExprParent(memberCall->getImplicitObjectArgument(), -1, parentId);
+    }
+    for (unsigned index = 0; index < expr->getNumArgs(); ++index)
+      recordExprParent(expr->getArg(index), static_cast<int>(index), parentId);
+    return;
+  }
+
+  // Indirect calls expose the callee as child zero and shift arguments by one.
+  recordExprParent(expr->getCallee(), 0, parentId);
+  for (unsigned index = 0; index < expr->getNumArgs(); ++index)
+    recordExprParent(expr->getArg(index), static_cast<int>(index + 1),
+                     parentId);
+}
+
 int ExprProcessor::processBaseExpr(Expr *expr, ExprKind exprKind) {
   if (int cachedId = findCachedExprId(expr); cachedId != -1)
     return cachedId;
@@ -181,7 +242,9 @@ void ExprProcessor::processUnaryOperator(const UnaryOperator *op) {
     return;
   }
 
-  processBaseExpr(const_cast<UnaryOperator *>(op), exprType);
+  const int parentId =
+      processBaseExpr(const_cast<UnaryOperator *>(op), exprType);
+  recordExprParent(op->getSubExpr(), 0, parentId);
 
   // 递归处理子表达式
   // Traverse(op->getSubExpr());
@@ -275,12 +338,19 @@ void ExprProcessor::processBinaryOperator(const BinaryOperator *op) {
   case BO_OrAssign:
   case BO_XorAssign:
     processAssignExpr(op);
+    if (const int parentId = findCachedExprId(op); parentId != -1) {
+      recordExprParent(op->getLHS(), 0, parentId);
+      recordExprParent(op->getRHS(), 1, parentId);
+    }
     return;
   default:
     return;
   }
 
-  processBaseExpr(const_cast<BinaryOperator *>(op), expr_type);
+  const int parentId =
+      processBaseExpr(const_cast<BinaryOperator *>(op), expr_type);
+  recordExprParent(op->getLHS(), 0, parentId);
+  recordExprParent(op->getRHS(), 1, parentId);
 
   // Traverse(op->getLHS());
   // Traverse(op->getRHS());
@@ -290,8 +360,11 @@ void ExprProcessor::processConditionalOperator(const ConditionalOperator *op) {
   if (findCachedExprId(op) != -1)
     return;
 
-  processBaseExpr(const_cast<ConditionalOperator *>(op),
-                  ExprKind::CONDITIONALEXPR);
+  const int parentId = processBaseExpr(const_cast<ConditionalOperator *>(op),
+                                       ExprKind::CONDITIONALEXPR);
+  recordExprParent(op->getCond(), 0, parentId);
+  recordExprParent(op->getTrueExpr(), 1, parentId);
+  recordExprParent(op->getFalseExpr(), 2, parentId);
   // Traverse(op->getCond());
   // Traverse(op->getTrueExpr());
   // Traverse(op->getFalseExpr());
@@ -532,6 +605,7 @@ void ExprProcessor::processCallExpr(const CallExpr *expr) {
 
   int exprId =
       processBaseExpr(const_cast<CallExpr *>(expr), ExprKind::CALLEXPR);
+  recordCallChildren(expr, exprId);
 
   // Get the called function
   const FunctionDecl *callee = expr->getDirectCallee();
@@ -583,8 +657,10 @@ void ExprProcessor::processArraySubscriptExpr(const ArraySubscriptExpr *expr) {
   if (findCachedExprId(expr) != -1)
     return;
 
-  processBaseExpr(const_cast<ArraySubscriptExpr *>(expr),
-                  ExprKind::SUBSCRIPTEXPR);
+  const int parentId = processBaseExpr(const_cast<ArraySubscriptExpr *>(expr),
+                                       ExprKind::SUBSCRIPTEXPR);
+  recordExprParent(expr->getBase(), 0, parentId);
+  recordExprParent(expr->getIdx(), 1, parentId);
 }
 
 void ExprProcessor::processInitListExpr(const InitListExpr *expr) {
@@ -593,6 +669,9 @@ void ExprProcessor::processInitListExpr(const InitListExpr *expr) {
 
   int exprId = processBaseExpr(const_cast<InitListExpr *>(expr),
                                ExprKind::BRACED_INIT_LIST);
+
+  for (unsigned index = 0; index < expr->getNumInits(); ++index)
+    recordExprParent(expr->getInit(index), static_cast<int>(index), exprId);
 
   QualType initType = expr->getType();
 
@@ -720,6 +799,8 @@ void ExprProcessor::processUnaryExprOrTypeTraitExpr(const UnaryExprOrTypeTraitEx
   ExprKind exprKind = (kind == UETT_SizeOf) ? ExprKind::RUNTIME_SIZEOF : ExprKind::RUNTIME_ALIGNOF;
 
   int exprId = processBaseExpr(const_cast<UnaryExprOrTypeTraitExpr *>(expr), exprKind);
+  if (!expr->isArgumentType())
+    recordExprParent(expr->getArgumentExpr(), 0, exprId);
   recordSizeOfBind(exprId, expr);
 }
 

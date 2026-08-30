@@ -1,4 +1,5 @@
 #include "core/processor/stmt_processor.h"
+#include "core/processor/expr_processor.h"
 #include "core/srcloc_recorder.h"
 #include "db/dependency_manager.h"
 #include "db/storage_facade.h"
@@ -17,7 +18,8 @@
 namespace {
 
 template <typename RelationModel>
-void insertStmtRelation(int ownerId, Stmt *child, ASTContext *astContext) {
+void insertStmtRelation(int ownerId, Stmt *child, ASTContext *astContext,
+                        ExprProcessor *exprProcessor) {
   if (auto *expr = llvm::dyn_cast<Expr>(child)) {
     KeyType stmtKey = KeyGen::Stmt_::makeKey(child, astContext);
     LocIdPair *locIdPair = SrcLocRecorder::processStmt(child, astContext);
@@ -33,9 +35,20 @@ void insertStmtRelation(int ownerId, Stmt *child, ASTContext *astContext) {
       STG.insertClassObj(relation);
     };
 
+    int exprId = -1;
+    if (exprProcessor)
+      exprId = exprProcessor->getOrProcessMainTreeExprId(expr);
+
     KeyType exprKey = KeyGen::Expr_::makeKey(expr, astContext);
-    if (auto cachedId = SEARCH_EXPR_CACHE(exprKey)) {
-      materializeExprStmt(*cachedId);
+    if (exprId == -1) {
+      if (auto cachedId = SEARCH_EXPR_CACHE(exprKey))
+        exprId = *cachedId;
+    }
+
+    if (exprId != -1) {
+      materializeExprStmt(exprId);
+      if (exprProcessor)
+        exprProcessor->recordExprParentId(exprId, 0, exprId);
       return;
     }
 
@@ -60,6 +73,24 @@ void insertStmtRelation(int ownerId, Stmt *child, ASTContext *astContext) {
                          STG.insertClassObj(resolvedRelation);
                        }};
   DependencyManager::instance().addDependency(update);
+}
+
+void materializeBlockExprStmt(Expr *expr, ASTContext *astContext,
+                              ExprProcessor *exprProcessor) {
+  if (!expr || !astContext || !exprProcessor)
+    return;
+
+  const int exprId = exprProcessor->getOrProcessMainTreeExprId(expr);
+  if (exprId == -1)
+    return;
+
+  const KeyType stmtKey = KeyGen::Stmt_::makeKey(expr, astContext);
+  LocIdPair *locIdPair = SrcLocRecorder::processStmt(expr, astContext);
+  DbModel::Stmt stmtModel = {exprId, static_cast<int>(StmtKind::EXPR),
+                             locIdPair->spec_id};
+  INSERT_STMT_CACHE(stmtKey, exprId);
+  STG.insertClassObj(stmtModel);
+  exprProcessor->recordExprParentId(exprId, 0, exprId);
 }
 
 } // namespace
@@ -131,29 +162,40 @@ int StmtProcessor::processIfStmt(IfStmt *ifStmt) {
 
   if (statementKind == IfStatementKind::Ordinary) {
     if (Stmt *init = ifStmt->getInit())
-      insertStmtRelation<DbModel::IfInit>(if_stmt_id, init, ast_context_);
+      insertStmtRelation<DbModel::IfInit>(if_stmt_id, init, ast_context_,
+                                          expr_processor_);
     if (Stmt *then = ifStmt->getThen())
-      insertStmtRelation<DbModel::IfThen>(if_stmt_id, then, ast_context_);
+      insertStmtRelation<DbModel::IfThen>(if_stmt_id, then, ast_context_,
+                                          expr_processor_);
     if (Stmt *elseStmt = ifStmt->getElse())
-      insertStmtRelation<DbModel::IfElse>(if_stmt_id, elseStmt, ast_context_);
+      insertStmtRelation<DbModel::IfElse>(if_stmt_id, elseStmt, ast_context_,
+                                          expr_processor_);
   } else if (statementKind == IfStatementKind::Constexpr) {
     if (Stmt *init = ifStmt->getInit())
       insertStmtRelation<DbModel::ConstexprIfInit>(if_stmt_id, init,
-                                                   ast_context_);
+                                                   ast_context_,
+                                                   expr_processor_);
     if (Stmt *then = ifStmt->getThen())
       insertStmtRelation<DbModel::ConstexprIfThen>(if_stmt_id, then,
-                                                   ast_context_);
+                                                   ast_context_,
+                                                   expr_processor_);
     if (Stmt *elseStmt = ifStmt->getElse())
       insertStmtRelation<DbModel::ConstexprIfElse>(if_stmt_id, elseStmt,
-                                                   ast_context_);
+                                                   ast_context_,
+                                                   expr_processor_);
   } else {
     if (Stmt *then = ifStmt->getThen())
       insertStmtRelation<DbModel::ConstevalIfThen>(if_stmt_id, then,
-                                                   ast_context_);
+                                                   ast_context_,
+                                                   expr_processor_);
     if (Stmt *elseStmt = ifStmt->getElse())
       insertStmtRelation<DbModel::ConstevalIfElse>(if_stmt_id, elseStmt,
-                                                   ast_context_);
+                                                   ast_context_,
+                                                   expr_processor_);
   }
+
+  if (expr_processor_ && ifStmt->getCond())
+    expr_processor_->recordExprParent(ifStmt->getCond(), 1, if_stmt_id);
 
   return if_stmt_id;
 }
@@ -186,6 +228,8 @@ int StmtProcessor::processForStmt(ForStmt *forStmt) {
 
   // 2. 处理条件部分
   if (Expr *cond = forStmt->getCond()) {
+    if (expr_processor_)
+      expr_processor_->recordExprParent(cond, 1, for_stmt_id);
     KeyType exprKey = KeyGen::Expr_::makeKey(cond, ast_context_);
     if (auto cachedId = SEARCH_EXPR_CACHE(exprKey)) {
       DbModel::ForCond forCondModel = {for_stmt_id, *cachedId};
@@ -204,6 +248,8 @@ int StmtProcessor::processForStmt(ForStmt *forStmt) {
 
   // 3. 处理更新部分
   if (Expr *inc = forStmt->getInc()) {
+    if (expr_processor_)
+      expr_processor_->recordExprParent(inc, 2, for_stmt_id);
     KeyType exprKey = KeyGen::Expr_::makeKey(inc, ast_context_);
     if (auto cachedId = SEARCH_EXPR_CACHE(exprKey)) {
       DbModel::ForUpdate forUpdateModel = {for_stmt_id, *cachedId};
@@ -274,6 +320,9 @@ int StmtProcessor::processCXXForRangeStmt(CXXForRangeStmt *rangeForStmt) {
 int StmtProcessor::processWhileStmt(WhileStmt *whileStmt) {
   int while_stmt_id = getStmtId(whileStmt, StmtKind::WHILE);
 
+  if (expr_processor_ && whileStmt->getCond())
+    expr_processor_->recordExprParent(whileStmt->getCond(), 0, while_stmt_id);
+
   // 处理循环体
   if (Stmt *body = whileStmt->getBody()) {
     KeyType stmtKey = KeyGen::Stmt_::makeKey(body, ast_context_);
@@ -298,6 +347,9 @@ int StmtProcessor::processWhileStmt(WhileStmt *whileStmt) {
 int StmtProcessor::processDoStmt(DoStmt *doStmt) {
   int do_stmt_id = getStmtId(doStmt, StmtKind::END_TEST_WHILE);
 
+  if (expr_processor_ && doStmt->getCond())
+    expr_processor_->recordExprParent(doStmt->getCond(), 0, do_stmt_id);
+
   // 处理循环体
   if (Stmt *body = doStmt->getBody()) {
     KeyType stmtKey = KeyGen::Stmt_::makeKey(body, ast_context_);
@@ -321,6 +373,10 @@ int StmtProcessor::processDoStmt(DoStmt *doStmt) {
 
 int StmtProcessor::processSwitchStmt(SwitchStmt *switchStmt) {
   int switch_stmt_id = getStmtId(switchStmt, StmtKind::SWITCH);
+
+  if (expr_processor_ && switchStmt->getCond())
+    expr_processor_->recordExprParent(switchStmt->getCond(), 1,
+                                      switch_stmt_id);
 
   // 1. 处理初始化部分
   if (Stmt *init = switchStmt->getInit()) {
@@ -390,11 +446,19 @@ int StmtProcessor::processSwitchStmt(SwitchStmt *switchStmt) {
 }
 
 int StmtProcessor::processBlockStmt(CompoundStmt *blockStmt) {
-  return getStmtId(blockStmt, StmtKind::BLOCK);
+  const int blockId = getStmtId(blockStmt, StmtKind::BLOCK);
+  for (Stmt *child : blockStmt->body()) {
+    if (auto *expr = llvm::dyn_cast<Expr>(child))
+      materializeBlockExprStmt(expr, ast_context_, expr_processor_);
+  }
+  return blockId;
 }
 
 int StmtProcessor::processReturnStmt(ReturnStmt *returnStmt) {
-  return getStmtId(returnStmt, StmtKind::RETURN);
+  const int returnId = getStmtId(returnStmt, StmtKind::RETURN);
+  if (expr_processor_ && returnStmt->getRetValue())
+    expr_processor_->recordExprParent(returnStmt->getRetValue(), 0, returnId);
+  return returnId;
 }
 
 int StmtProcessor::processDeclStmt(DeclStmt *declStmt) {

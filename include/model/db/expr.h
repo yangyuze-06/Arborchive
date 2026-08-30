@@ -276,6 +276,14 @@ struct Expr {
   using KeyType = std::string;
 };
 
+// CodeQL main-expression-tree edge.
+// exprparents(expr_id: @expr, child_index: int, parent_id: @exprparent)
+struct ExprParent {
+  int expr_id;
+  int child_index;
+  int parent_id;
+};
+
 struct FunBind {
   int expr;
   int fun;

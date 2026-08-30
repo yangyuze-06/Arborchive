@@ -198,6 +198,19 @@ P7 先抽取 attribute presence graph，再处理 argument system。presence 与
 - Focus: `exprparents`、expression relationship graph
 - Complexity: Medium
 - Boundary: 只处理表达式父子关系核心图，不混入 casts、allocation 或 attribute expr argument 的专门语义。
+- Status: DONE
+- Scope: `exprparents(expr_id, child_index, parent_id)` 连接已支持的
+  expression、statement 与 P8 initialiser；主表达式树通过
+  `IgnoreParenCasts()` 排除 conversion wrapper，并保留 CodeQL 的 call、
+  control-flow 与 initialiser 子节点索引。
+- Architecture: `ExprProcessor` 持有图关系、规范化与去重语义，
+  `StmtProcessor`/`InitializationProcessor` 只通过显式 API 写边；
+  `ASTVisitor` 只注入依赖并继续派发。
+- Validation: `tests/unit-tests/p10/expression_graph_case.cc` 由
+  `scripts/test_all.sh` 执行，SQLite 断言覆盖列形状、引用完整性、唯一主父、
+  conversion 边界及代表性 child index。
+- Migration: 新表不改变已有字段；旧数据库需重新生成以获得
+  `exprparents`。
 
 ### P11: Casts & Conversion System
 

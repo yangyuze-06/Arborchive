@@ -17,6 +17,14 @@ inline auto exprs() {
       make_column("location", &DbModel::Expr::location));
 }
 
+inline auto exprparents() {
+  return make_table(
+      "exprparents",
+      make_column("expr_id", &DbModel::ExprParent::expr_id),
+      make_column("child_index", &DbModel::ExprParent::child_index),
+      make_column("parent_id", &DbModel::ExprParent::parent_id));
+}
+
 inline auto funbind() {
   return make_table(
       "funbind",

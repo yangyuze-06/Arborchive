@@ -1,4 +1,5 @@
 #include "core/processor/initialization_processor.h"
+#include "core/processor/expr_processor.h"
 #include "core/srcloc_recorder.h"
 #include "db/dependency_manager.h"
 #include "db/storage_facade.h"
@@ -41,6 +42,9 @@ void InitializationProcessor::processVarDeclInitializer(
       resolveExprIdOrDefer(initExpr, initId, varId, locIdPair->spec_id);
 
   recordInitialiser(initId, varId, exprId, locIdPair->spec_id);
+
+  if (expr_processor_)
+    expr_processor_->recordExprParent(initExpr, 0, initId);
 
   if (isBracedInitializer(initExpr))
     recordBracedInitialiser(initId);
