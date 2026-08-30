@@ -195,14 +195,14 @@ DONE   190. lambda_capture
 DONE   192. stmts
   193. type_vla
   194. variable_vla
-  195. if_initialization
+DONE   195. if_initialization
 DONE   196. if_then
 DONE   197. if_else
-  198. constexpr_if_initialization
-  199. constexpr_if_then
-  200. constexpr_if_else
-  201. consteval_if_then
-  202. consteval_if_else
+DONE   198. constexpr_if_initialization
+DONE   199. constexpr_if_then
+DONE   200. constexpr_if_else
+DONE   201. consteval_if_then
+DONE   202. consteval_if_else
 DONE   203. while_body
 DONE   204. do_body
 DONE   205. switch_initialization

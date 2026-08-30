@@ -516,6 +516,153 @@ def check_p8(audit: Audit) -> None:
     )
 
 
+def check_p9(audit: Audit) -> None:
+    expected_columns = {
+        "if_initialization": ["if_stmt", "init_id"],
+        "constexpr_if_initialization": ["constexpr_if_stmt", "init_id"],
+        "constexpr_if_then": ["constexpr_if_stmt", "then_id"],
+        "constexpr_if_else": ["constexpr_if_stmt", "else_id"],
+        "consteval_if_then": ["constexpr_if_stmt", "then_id"],
+        "consteval_if_else": ["constexpr_if_stmt", "else_id"],
+    }
+    for table, columns in expected_columns.items():
+        audit.check_columns(table, columns)
+        audit.check(
+            f"{table} owner primary key",
+            f"select count(*) from pragma_table_info('{table}') "
+            f"where name='{columns[0]}' and pk=1",
+            1,
+        )
+
+    audit.check(
+        "correct if initialization table exists",
+        "select count(*) from sqlite_master "
+        "where type='table' and name='if_initialization'",
+        1,
+    )
+    audit.check(
+        "misspelled if initialization table removed",
+        "select count(*) from sqlite_master "
+        "where type='table' and name='if_initalization'",
+        0,
+    )
+
+    expected_kinds = {1: 2, 2: 2, 35: 3, 38: 1, 39: 1}
+    for kind, expected in expected_kinds.items():
+        audit.check(
+            f"statement kind {kind} count",
+            f"select count(*) from stmts where kind={kind}",
+            expected,
+        )
+
+    for table, expected in (
+        ("if_initialization", 2),
+        ("if_then", 2),
+        ("if_else", 2),
+        ("constexpr_if_initialization", 2),
+        ("constexpr_if_then", 3),
+        ("constexpr_if_else", 3),
+        ("consteval_if_then", 2),
+        ("consteval_if_else", 2),
+    ):
+        check_count(audit, table, expected)
+
+    relation_checks = (
+        (
+            "constexpr_if_initialization",
+            "init_id",
+            "child.kind not in (1,17)",
+            "owner.kind<>35",
+        ),
+        ("constexpr_if_then", "then_id", "child.kind<>7", "owner.kind<>35"),
+        ("constexpr_if_else", "else_id", "child.kind<>7", "owner.kind<>35"),
+        (
+            "consteval_if_then",
+            "then_id",
+            "child.kind<>7",
+            "owner.kind not in (38,39)",
+        ),
+        (
+            "consteval_if_else",
+            "else_id",
+            "child.kind<>7",
+            "owner.kind not in (38,39)",
+        ),
+    )
+    for table, child_column, child_mismatch, owner_mismatch in relation_checks:
+        audit.check(
+            f"{table} reference orphans",
+            f"""
+            select count(*) from {table} relation
+            left join stmts owner on owner.id=relation.constexpr_if_stmt
+            left join stmts child on child.id=relation.{child_column}
+            where owner.id is null or {owner_mismatch}
+               or child.id is null or {child_mismatch}
+               or relation.{child_column} < 0
+            """,
+            0,
+        )
+
+    audit.check(
+        "ordinary if initialization references",
+        """
+        select count(*) from if_initialization relation
+        left join stmts owner on owner.id=relation.if_stmt
+        left join stmts child on child.id=relation.init_id
+        where owner.id is null or owner.kind<>2 or child.id is null
+           or child.kind not in (1,17)
+           or relation.init_id < 0
+        """,
+        0,
+    )
+    for table, owner_column, child_column in (
+        ("if_initialization", "if_stmt", "init_id"),
+        (
+            "constexpr_if_initialization",
+            "constexpr_if_stmt",
+            "init_id",
+        ),
+    ):
+        audit.check(
+            f"{table} declaration/expression initializer distribution",
+            f"""
+            select count(*) from (
+              select child.kind, count(*) as n
+              from {table} relation
+              join stmts owner on owner.id=relation.{owner_column}
+              join stmts child on child.id=relation.{child_column}
+              group by child.kind
+              having (child.kind=1 and n=1) or (child.kind=17 and n=1)
+            )
+            """,
+            2,
+        )
+        audit.check(
+            f"{table} expression initializer reuses expr id",
+            f"""
+            select count(*) from {table} relation
+            join stmts child on child.id=relation.{child_column}
+            left join exprs expression on expression.id=child.id
+            where child.kind=1 and expression.id is null
+            """,
+            0,
+        )
+    for table in ("consteval_if_then", "consteval_if_else"):
+        audit.check(
+            f"{table} owner kind distribution",
+            f"""
+            select count(*) from (
+              select owner.kind, count(*) as n
+              from {table} relation
+              join stmts owner on owner.id=relation.constexpr_if_stmt
+              group by owner.kind
+              having (owner.kind=38 and n=1) or (owner.kind=39 and n=1)
+            )
+            """,
+            2,
+        )
+
+
 def run(case: str, database: Path) -> int:
     audit = Audit(case, database)
     try:
@@ -530,6 +677,8 @@ def run(case: str, database: Path) -> int:
             check_p7(audit)
         elif case == "unit-tests/p8/initialization_case":
             check_p8(audit)
+        elif case == "unit-tests/p9/constexpr_flow_case":
+            check_p9(audit)
         else:
             audit.warn_if_positive(
                 "known non-P8 initialiser expression placeholders",
