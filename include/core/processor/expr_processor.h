@@ -15,6 +15,7 @@ using namespace clang;
 
 class TypeProcessor;
 class SpecifierProcessor;
+class FunctionProcessor;
 
 class ExprProcessor : public BaseProcessor {
 public:
@@ -47,6 +48,8 @@ public:
   void processAssignOpExpr(const BinaryOperator *op);
   void processAssignExpr(const BinaryOperator *op);
   void processCallExpr(const CallExpr *expr);
+  void processCXXNewExpr(const CXXNewExpr *expr);
+  void processCXXDeleteExpr(const CXXDeleteExpr *expr);
 
   int processCastExpr(const CastExpr *castExpr);
   int processParenExpr(const ParenExpr *parenExpr);
@@ -60,9 +63,10 @@ public:
 
   ExprProcessor(ASTContext *ast_context, const PrintingPolicy pp,
                 TypeProcessor *tp = nullptr,
-                SpecifierProcessor *sp = nullptr)
+                SpecifierProcessor *sp = nullptr,
+                FunctionProcessor *fp = nullptr)
       : BaseProcessor(ast_context, pp), type_processor_(tp),
-        specifier_processor_(sp) {};
+        specifier_processor_(sp), function_processor_(fp) {};
   ~ExprProcessor() = default;
 
 private:
@@ -97,12 +101,21 @@ private:
 
   const clang::Expr *normalizeMainTreeExpr(const clang::Expr *expr) const;
   void recordCallChildren(const CallExpr *expr, int parentId);
+  QualType getArrayNewAllocatedType(const CXXNewExpr *expr) const;
+  int classifyAllocatorForm(const CXXNewExpr *expr) const;
+  int classifyDeallocatorForm(const FunctionDecl *decl) const;
+  bool requiresRuntimeDeallocatorSelection(const CXXDeleteExpr *expr) const;
+  bool hasTriviallyDestructibleDestroyedType(
+      const CXXDeleteExpr *expr) const;
+  void recordAllocator(int exprId, const CXXNewExpr *expr);
+  void recordDeallocator(int exprId, const FunctionDecl *decl);
 
   std::unordered_set<std::string> recorded_parent_edges_;
   std::unordered_set<int> recorded_loads_;
 
   TypeProcessor *type_processor_ = nullptr;
   SpecifierProcessor *specifier_processor_ = nullptr;
+  FunctionProcessor *function_processor_ = nullptr;
 };
 
 #endif // _EXPR_PROCESSOR_H_

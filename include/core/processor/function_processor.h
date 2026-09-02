@@ -9,6 +9,10 @@ using namespace clang;
 
 class FunctionProcessor : public BaseProcessor {
 public:
+  // Resolve and, when necessary, materialize a function declaration referenced
+  // by another semantic subsystem. Always returns a persisted function id or
+  // -1; callers must not persist unresolved references.
+  int resolveFunctionReference(const FunctionDecl *decl);
   int routerProcess(const FunctionDecl *decl);
   int processCXXConstructor(const CXXConstructorDecl *decl);
   int processCXXDestructor(const CXXDestructorDecl *decl);

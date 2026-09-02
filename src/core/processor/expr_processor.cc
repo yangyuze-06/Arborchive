@@ -1,4 +1,5 @@
 #include "core/processor/expr_processor.h"
+#include "core/processor/function_processor.h"
 #include "core/processor/specifier_processor.h"
 #include "core/processor/type_processor.h"
 #include "core/srcloc_recorder.h"
@@ -11,6 +12,7 @@
 #include "util/key_generator/values.h"
 #include "util/key_generator/variable.h"
 #include "util/logger/macros.h"
+#include <clang/AST/DeclCXX.h>
 #include <clang/AST/DeclTemplate.h>
 #include <clang/AST/Expr.h>
 #include <clang/AST/ExprConcepts.h>
@@ -44,6 +46,7 @@ bool ExprProcessor::canProcessExprForReference(const Expr *expr) const {
                    FloatingLiteral, CharacterLiteral, CXXBoolLiteralExpr,
                    CXXNullPtrLiteralExpr,
                    CallExpr, CastExpr, ParenExpr, CXXThisExpr,
+                   CXXNewExpr, CXXDeleteExpr,
                    ArraySubscriptExpr, InitListExpr,
                    UnaryExprOrTypeTraitExpr>(expr);
 }
@@ -87,6 +90,10 @@ int ExprProcessor::getOrProcessExprId(const clang::Expr *expr) {
                     ExprKind::LITERAL);
   } else if (const auto *callExpr = llvm::dyn_cast<CallExpr>(expr)) {
     processCallExpr(callExpr);
+  } else if (const auto *newExpr = llvm::dyn_cast<CXXNewExpr>(expr)) {
+    processCXXNewExpr(newExpr);
+  } else if (const auto *deleteExpr = llvm::dyn_cast<CXXDeleteExpr>(expr)) {
+    processCXXDeleteExpr(deleteExpr);
   } else if (const auto *castExpr = llvm::dyn_cast<CastExpr>(expr)) {
     processCastExpr(castExpr);
   } else if (const auto *parenExpr = llvm::dyn_cast<ParenExpr>(expr)) {
@@ -102,6 +109,170 @@ int ExprProcessor::getOrProcessExprId(const clang::Expr *expr) {
   }
 
   return findCachedExprId(expr);
+}
+
+QualType
+ExprProcessor::getArrayNewAllocatedType(const CXXNewExpr *expr) const {
+  if (!expr || !ast_context_ || !expr->isArray())
+    return QualType();
+
+  const QualType elementType = expr->getAllocatedType();
+  const auto arraySize = expr->getArraySize();
+  if (arraySize) {
+    if (const auto constantSize =
+            (*arraySize)->getIntegerConstantExpr(*ast_context_)) {
+      return ast_context_->getConstantArrayType(
+          elementType, *constantSize, *arraySize,
+          ArraySizeModifier::Normal, 0);
+    }
+  }
+
+  return ast_context_->getIncompleteArrayType(
+      elementType, ArraySizeModifier::Normal, 0);
+}
+
+int ExprProcessor::classifyAllocatorForm(const CXXNewExpr *expr) const {
+  if (!expr)
+    return 0;
+  if (expr->passAlignment())
+    return 1;
+
+  const FunctionDecl *allocator = expr->getOperatorNew();
+  if (!allocator)
+    return 0;
+  for (const ParmVarDecl *param : allocator->parameters()) {
+    if (param->getType()->isAlignValT() ||
+        param->getType().getCanonicalType()->isAlignValT())
+      return 1;
+  }
+  return 0;
+}
+
+int ExprProcessor::classifyDeallocatorForm(const FunctionDecl *decl) const {
+  if (!decl || !ast_context_)
+    return 0;
+
+  int form = decl->isDestroyingOperatorDelete() ? 4 : 0;
+  for (const ParmVarDecl *param : decl->parameters()) {
+    const QualType paramType = param->getType();
+    if (ast_context_->hasSameType(paramType, ast_context_->getSizeType()))
+      form |= 1;
+    if (paramType->isAlignValT() ||
+        paramType.getCanonicalType()->isAlignValT())
+      form |= 2;
+  }
+  return form;
+}
+
+bool ExprProcessor::requiresRuntimeDeallocatorSelection(
+    const CXXDeleteExpr *expr) const {
+  if (!expr || expr->isGlobalDelete() || expr->isArrayForm())
+    return false;
+  const QualType destroyedType = expr->getDestroyedType();
+  if (destroyedType.isNull())
+    return false;
+  const CXXRecordDecl *record = destroyedType->getAsCXXRecordDecl();
+  if (!record)
+    return false;
+  const CXXRecordDecl *definition = record->getDefinition();
+  if (!definition)
+    return false;
+  record = definition;
+  const CXXDestructorDecl *destructor = record->getDestructor();
+  return destructor && destructor->isVirtual() && !record->isEffectivelyFinal();
+}
+
+bool ExprProcessor::hasTriviallyDestructibleDestroyedType(
+    const CXXDeleteExpr *expr) const {
+  if (!expr)
+    return false;
+  const QualType destroyedType = expr->getDestroyedType();
+  return !destroyedType.isNull() &&
+         destroyedType.isDestructedType() == QualType::DK_none;
+}
+
+void ExprProcessor::recordAllocator(int exprId, const CXXNewExpr *expr) {
+  if (exprId < 0 || !expr || !function_processor_)
+    return;
+  const int functionId =
+      function_processor_->resolveFunctionReference(expr->getOperatorNew());
+  if (functionId < 0)
+    return;
+  DbModel::ExprAllocator allocatorModel = {
+      exprId, functionId, classifyAllocatorForm(expr)};
+  STG.insertClassObj(allocatorModel);
+}
+
+void ExprProcessor::recordDeallocator(int exprId, const FunctionDecl *decl) {
+  if (exprId < 0 || !decl || !function_processor_)
+    return;
+  const int functionId = function_processor_->resolveFunctionReference(decl);
+  if (functionId < 0)
+    return;
+  DbModel::ExprDeallocator deallocatorModel = {
+      exprId, functionId, classifyDeallocatorForm(decl)};
+  STG.insertClassObj(deallocatorModel);
+}
+
+void ExprProcessor::processCXXNewExpr(const CXXNewExpr *expr) {
+  if (!canProcessExprForReference(expr) || findCachedExprId(expr) >= 0)
+    return;
+
+  const ExprKind kind =
+      expr->isArray() ? ExprKind::NEW_ARRAY_EXPR : ExprKind::NEW_EXPR;
+  const int exprId =
+      processBaseExpr(const_cast<CXXNewExpr *>(expr), kind);
+  if (exprId < 0)
+    return;
+
+  QualType allocatedType = expr->getAllocatedType();
+  if (expr->isArray()) {
+    // The reconstructed outer array is not part of the traversed TypeLoc.
+    // Materialize its element first so nested fixed arrays resolve immediately.
+    if (type_processor_)
+      type_processor_->processType(allocatedType.getTypePtr());
+    allocatedType = getArrayNewAllocatedType(expr);
+  }
+  if (!allocatedType.isNull() && type_processor_) {
+    const int typeId = type_processor_->processType(allocatedType.getTypePtr());
+    if (typeId >= 0) {
+      if (expr->isArray()) {
+        DbModel::NewArrayAllocatedType allocatedTypeModel = {exprId, typeId};
+        STG.insertClassObj(allocatedTypeModel);
+      } else {
+        DbModel::NewAllocatedType allocatedTypeModel = {exprId, typeId};
+        STG.insertClassObj(allocatedTypeModel);
+      }
+    }
+  }
+
+  recordAllocator(exprId, expr);
+  if (expr->getOperatorDelete())
+    recordDeallocator(exprId, expr->getOperatorDelete());
+
+  if (const Expr *initializer = expr->getInitializer())
+    recordExprParent(initializer, 1, exprId);
+  if (const auto arraySize = expr->getArraySize();
+      arraySize &&
+      !(*arraySize)->isIntegerConstantExpr(*ast_context_))
+    recordExprParent(*arraySize, 2, exprId);
+}
+
+void ExprProcessor::processCXXDeleteExpr(const CXXDeleteExpr *expr) {
+  if (!canProcessExprForReference(expr) || findCachedExprId(expr) >= 0)
+    return;
+
+  const ExprKind kind = expr->isArrayForm() ? ExprKind::DELETE_ARRAY_EXPR
+                                            : ExprKind::DELETE_EXPR;
+  const int exprId =
+      processBaseExpr(const_cast<CXXDeleteExpr *>(expr), kind);
+  if (exprId < 0)
+    return;
+
+  if (!requiresRuntimeDeallocatorSelection(expr))
+    recordDeallocator(exprId, expr->getOperatorDelete());
+  if (hasTriviallyDestructibleDestroyedType(expr))
+    recordExprParent(expr->getArgument(), 3, exprId);
 }
 
 const clang::Expr *
