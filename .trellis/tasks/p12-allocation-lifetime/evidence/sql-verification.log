@@ -1,0 +1,79 @@
+DATABASE=tests/output/unit-tests-p12-allocation_lifetime_case.db
+--- integrity/table count ---
+integrity  table_count
+---------  -----------
+ok         173
+--- schema columns ---
+[expr_allocator]
+cid  name  type     notnull  dflt_value  pk
+---  ----  -------  -------  ----------  --
+0    expr  INTEGER  1                    1
+1    func  INTEGER  1                    0
+2    form  INTEGER  1                    0
+[expr_deallocator]
+cid  name  type     notnull  dflt_value  pk
+---  ----  -------  -------  ----------  --
+0    expr  INTEGER  1                    1
+1    func  INTEGER  1                    0
+2    form  INTEGER  1                    0
+[new_allocated_type]
+cid  name     type     notnull  dflt_value  pk
+---  -------  -------  -------  ----------  --
+0    expr     INTEGER  1                    1
+1    type_id  INTEGER  1                    0
+[new_array_allocated_type]
+cid  name     type     notnull  dflt_value  pk
+---  -------  -------  -------  ----------  --
+0    expr     INTEGER  1                    1
+1    type_id  INTEGER  1                    0
+--- kinds ---
+kind  rows
+----  ----
+87    5
+88    8
+128   2
+129   3
+--- relation counts/forms ---
+relation                  rows  min_func
+------------------------  ----  --------
+expr_allocator            8     14787
+expr_deallocator          17    14829
+new_allocated_type        5     14866
+new_array_allocated_type  3     15498
+relation     form  rows
+-----------  ----  ----
+allocator    0     7
+allocator    1     1
+deallocator  0     4
+deallocator  1     9
+deallocator  2     2
+deallocator  3     1
+deallocator  4     1
+--- array type shapes ---
+outer_type  element_type
+----------  ------------
+int[3]
+int[]
+int[][4]    int[4]
+--- graph safe subset ---
+child_index  rows
+-----------  ----
+1            2
+2            2
+3            5
+--- reference/runtime/static/dependent guards ---
+invalid_function_refs
+---------------------
+0
+runtime_virtual_relations
+-------------------------
+0
+static_virtual_type_relations
+-----------------------------
+3
+dependent_p12_expressions
+-------------------------
+0
+unresolved_array_elements
+-------------------------
+0

@@ -1,0 +1,82 @@
+P12 Allocation & Lifetime Verification
+
+CHANGED_BRANCH=codex/p12-allocation-lifetime
+CHANGED_FIELDS=exprs.kind(87,88,128,129); expr_allocator(expr,func,form); expr_deallocator(expr,func,form); new_allocated_type(expr,type_id); new_array_allocated_type(expr,type_id); exprparents.child_index(1,2,3); runtime deallocator guard; dependent-expression deferral
+ORIGINAL_HEAD=7a6321e24d45c5c375268a90e81ea705262b09f2
+BASELINE_SOURCE_HEAD=32ea3e979c46c0ae6e2a741b2e364543e743b7d7
+ORIGINAL_PRIMARY_SHA256=8b2fb624630563287e946776a327f2d03ba4184977673205000f3e5a1b30d45a src/core/processor/expr_processor.cc
+REVIEW_PRE_FIX_PRIMARY_SHA256=b294d0399490f0c92a497fa657c67e5238f95520369c518655acdfc76b49e4d3
+MODIFIED_PRIMARY_SHA256=eaff8bc0ece67d6e9f4a811a3e65ec673af305f3df9b089cec5799ed3bca6a4a
+
+ARTIFACT_MODIFIED_FILE=/Users/y4n9/Workspace/Projects/My-github-projects/Arborchive/.trellis/tasks/p12-allocation-lifetime/evidence/MODIFIED_FILE
+ARTIFACT_DIFF_FILE=/Users/y4n9/Workspace/Projects/My-github-projects/Arborchive/.trellis/tasks/p12-allocation-lifetime/evidence/DIFF_FILE
+ARTIFACT_VERIFICATION=/Users/y4n9/Workspace/Projects/My-github-projects/Arborchive/.trellis/tasks/p12-allocation-lifetime/evidence/VERIFICATION.txt
+ARTIFACT_ROLLBACK=/Users/y4n9/Workspace/Projects/My-github-projects/Arborchive/.trellis/tasks/p12-allocation-lifetime/evidence/ROLLBACK.sh
+
+BASELINE_COMMAND=scripts/test_all.sh
+BASELINE_INPUT=clean working tree at 32ea3e979c46c0ae6e2a741b2e364543e743b7d7
+BASELINE_LITERAL_OUTPUT_RESULT:
+  (no rows)
+[test_all] All checks passed.
+BASELINE_EXIT=0
+BASELINE_STATUS=0
+
+REVIEW_BASELINE_COMMAND=scripts/assert_test_db.py unit-tests/p12/allocation_lifetime_case tests/output/unit-tests-p12-allocation_lifetime_case.db; sqlite3 review fixture queries
+REVIEW_BASELINE_INPUT=pre-fix P12 database plus /tmp/p12-review-virtual.1s2087.db and /tmp/p12-review-dependent.VxQdiF.db
+REVIEW_BASELINE_LITERAL_OUTPUT_RESULT:
+[assert_db] unit-tests/p12/allocation_lifetime_case: PASS (0 warnings)
+virtual delete lines 12,13,14,15: func=NULL,NULL,NULL,NULL
+derivedtypes: id=268 name=type-parameter-0-0[] kind=4 type_id=-1
+REVIEW_BASELINE_EXIT=0
+
+MODIFIED_GENERATION_COMMAND=python3 scripts/generate_instantiations.py
+MODIFIED_GENERATION_INPUT=P12 fixed working tree
+MODIFIED_GENERATION_LITERAL_OUTPUT_RESULT=Successfully generated 171 instantiations in /Users/y4n9/Workspace/Projects/My-github-projects/Arborchive/scripts/../src/db/storage_facade_instantiations.inc
+MODIFIED_GENERATION_EXIT=0
+MODIFIED_BUILD_COMMAND=make LLVM_CONFIG=/opt/homebrew/opt/llvm@19/bin/llvm-config debug -j 8
+MODIFIED_BUILD_INPUT=P12 fixed working tree with LLVM 19
+MODIFIED_BUILD_LITERAL_OUTPUT_RESULT=debug executable build/demo linked successfully
+MODIFIED_BUILD_EXIT=0
+MODIFIED_TEST_COMMAND=scripts/test_all.sh
+MODIFIED_TEST_INPUT=P12 fixed working tree
+MODIFIED_TEST_LITERAL_OUTPUT_RESULT:
+  (no rows)
+[test_all] All checks passed.
+MODIFIED_TEST_EXIT=0
+MODIFIED_RESULT=PASS
+MODIFIED_STATUS=0
+
+TARGET_COMMAND=scripts/assert_test_db.py unit-tests/p12/allocation_lifetime_case tests/output/unit-tests-p12-allocation_lifetime_case.db
+TARGET_INPUT=tests/output/unit-tests-p12-allocation_lifetime_case.db
+TARGET_LITERAL_OUTPUT_RESULT=[assert_db] unit-tests/p12/allocation_lifetime_case: PASS (0 warnings)
+TARGET_STATUS=0
+
+REVIEW_FIX_COMMAND=build/demo -c config.example.toml -s REVIEW_FIXTURE -o REVIEW_DB; sqlite3 REVIEW_DB verification queries
+REVIEW_FIX_INPUT=/tmp/p12-review-virtual.1s2087.cc and /tmp/p12-review-dependent.VxQdiF.cc
+REVIEW_FIX_LITERAL_OUTPUT_RESULT:
+virtual line 12 runtime: func=NULL
+virtual line 13 global: func=344 form=1 operator delete
+virtual line 14 array: func=269 form=0 operator delete[]
+virtual line 15 final: func=393 form=0 operator delete
+dependent fixture: one concrete new[] specialization with valid allocator/deallocator/array type and one concrete delete specialization with valid deallocator; dependent pattern rows absent
+REVIEW_FIX_EXIT=0
+
+DATABASE_COMMAND=sqlite3 tests/output/unit-tests-p12-allocation_lifetime_case.db < P12 verification queries
+DATABASE_INPUT=tests/output/unit-tests-p12-allocation_lifetime_case.db
+DATABASE_LITERAL_OUTPUT_RESULT=kinds 87:5, 88:8, 128:2, 129:3; allocator rows 8; deallocator rows 17; allocated-type rows 5/3; child edges 1:2, 2:2, 3:5; invalid function refs 0; runtime virtual relation 0; static global/array/final relations 3; dependent P12 expressions 0; unresolved array elements 0
+DATABASE_STATUS=0
+DATABASE_EVIDENCE=/Users/y4n9/Workspace/Projects/My-github-projects/Arborchive/.trellis/tasks/p12-allocation-lifetime/evidence/sql-verification.log
+
+ROLLBACK_COMMAND=/Users/y4n9/Workspace/Projects/My-github-projects/Arborchive/.trellis/tasks/p12-allocation-lifetime/evidence/ROLLBACK.sh /tmp/arborchive-p12-zero-rollback.W0aYKD/repo /Users/y4n9/Workspace/Projects/My-github-projects/Arborchive/.trellis/tasks/p12-allocation-lifetime/evidence/DIFF_FILE
+ROLLBACK_INPUT=independent clean clone with DIFF_FILE applied
+ROLLBACK_LITERAL_OUTPUT_RESULT:
+ROLLBACK_RESULT=restored
+ROLLBACK_HEAD=7a6321e24d45c5c375268a90e81ea705262b09f2
+ROLLBACK_COPY=/tmp/arborchive-p12-zero-rollback.W0aYKD/repo
+ROLLBACK_GIT_STATUS=clean
+ROLLBACK_STATUS=0
+RESTORED_BEHAVIOR_STATUS=The independent copy returned to HEAD 7a6321e24d45c5c375268a90e81ea705262b09f2 with an empty git status; pre-P12 schema/behavior is restored there. The primary working tree remains modified and its fixed P12 full regression passes.
+
+DIFF_CHECK_COMMAND=git diff --check
+DIFF_CHECK_LITERAL_OUTPUT_RESULT=(empty)
+DIFF_CHECK_STATUS=0
