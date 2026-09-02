@@ -3,14 +3,25 @@ struct Base {
   int member;
 };
 
-struct Derived : Base {};
+struct Derived : Base {
+  int inherited_member() { return member; }
+};
 struct Other {};
+
+int decay_target(int value) { return value; }
+using FunctionPointer = int (*)(int);
 
 double implicit_numeric(int value) { return value; }
 bool implicit_bool(int *pointer) { return pointer; }
+int *implicit_null_pointer() { return nullptr; }
 Base *implicit_upcast(Derived *pointer) { return pointer; }
 int array_decay(int (&values)[3]) { return *values; }
 int parenthesized_load(int value) { return (value); }
+FunctionPointer function_decay() { return decay_target; }
+
+double paren_load_chain(int value) {
+  return static_cast<double>((value));
+}
 
 double nested_conversions(short value) {
   return static_cast<double>((int(value)));

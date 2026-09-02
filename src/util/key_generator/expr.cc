@@ -165,6 +165,12 @@ KeyType makeKey(const Expr *expr, ASTContext *ctx) {
     if (declRefExpr->getDecl()) {
       locStr += "-decl-" + std::to_string(declRefExpr->getDecl()->getID());
     }
+  } else if (llvm::isa<CXXThisExpr>(expr)) {
+    // `this` and its enclosing MemberExpr commonly share the same source
+    // location. CXXThisExpr was not previously materialized; give the new P11
+    // conversion-source identity a stable suffix without changing existing
+    // expression keys.
+    locStr += "-this";
   } else if (auto binaryOp = llvm::dyn_cast<BinaryOperator>(expr)) {
     locStr += "-opcode-" + std::to_string(binaryOp->getOpcode());
   } else if (auto unaryOp = llvm::dyn_cast<UnaryOperator>(expr)) {

@@ -75,6 +75,9 @@ private:
   bool canProcessExprForReference(const Expr *expr) const;
 
   int processBaseExpr(Expr *expr, ExprKind exprKind);
+  int getOrProcessConversionSourceId(const Expr *expr);
+  int processFunctionReference(const DeclRefExpr *expr);
+  int processThisExpr(const CXXThisExpr *expr);
   void recordExprType(const Expr *expr, int exprId);
   void processCastTypes(const CastExpr *castExpr);
   void recordExprConv(int convertedId, int conversionId);

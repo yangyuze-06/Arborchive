@@ -914,12 +914,12 @@ def check_p10(audit: Audit) -> None:
 
 def check_p11(audit: Audit) -> None:
     expected_counts = {
-        "exprs": 44,
-        "exprconv": 24,
-        "expr_types": 44,
-        "expr_isload": 15,
-        "compgenerated": 10,
-        "conversionkinds": 21,
+        "exprs": 56,
+        "exprconv": 30,
+        "expr_types": 56,
+        "expr_isload": 18,
+        "compgenerated": 14,
+        "conversionkinds": 26,
     }
     for table, expected in expected_counts.items():
         check_count(audit, table, expected)
@@ -936,9 +936,12 @@ def check_p11(audit: Audit) -> None:
     audit.check(
         "every expression has one type/category row",
         """
-        select count(*) from exprs expression
-        left join expr_types typed on typed.id=expression.id
-        where typed.id is null
+        select count(*) from (
+          select expression.id
+          from exprs expression
+          left join expr_types typed on typed.id=expression.id
+          group by expression.id having count(typed.id)<>1
+        )
         """,
         0,
     )
@@ -989,6 +992,61 @@ def check_p11(audit: Audit) -> None:
         1,
     )
     audit.check(
+        "paren load conversion chain order",
+        """
+        select count(*) from exprconv paren_edge
+        join exprs source
+          on source.id=paren_edge.converted and source.kind=84
+        join exprs paren
+          on paren.id=paren_edge.conversion and paren.kind=12
+        join exprconv implicit_edge on implicit_edge.converted=paren.id
+        join exprs implicit_cast
+          on implicit_cast.id=implicit_edge.conversion
+         and implicit_cast.kind=214
+        join exprconv explicit_edge
+          on explicit_edge.converted=implicit_cast.id
+        join exprs explicit_cast
+          on explicit_cast.id=explicit_edge.conversion
+         and explicit_cast.kind=210
+        """,
+        1,
+    )
+    audit.check(
+        "function-to-pointer decay source",
+        """
+        select count(*) from exprconv relation
+        join exprs source on source.id=relation.converted and source.kind=97
+        join exprs conversion
+          on conversion.id=relation.conversion and conversion.kind=214
+        join compgenerated generated on generated.id=conversion.id
+        """,
+        1,
+    )
+    audit.check(
+        "nullptr implicit conversion source",
+        """
+        select count(*) from exprconv relation
+        join exprs source on source.id=relation.converted and source.kind=123
+        join exprs conversion
+          on conversion.id=relation.conversion and conversion.kind=214
+        join conversionkinds kind
+          on kind.expr_id=conversion.id and kind.kind=0
+        join compgenerated generated on generated.id=conversion.id
+        """,
+        1,
+    )
+    audit.check(
+        "unchecked derived-to-base conversion kind",
+        """
+        select count(*) from exprconv relation
+        join exprs source on source.id=relation.converted and source.kind=85
+        join conversionkinds kind
+          on kind.expr_id=relation.conversion and kind.kind=2
+        join compgenerated generated on generated.id=relation.conversion
+        """,
+        1,
+    )
+    audit.check(
         "load markers resolve to non-wrapper expressions",
         """
         select count(*) from expr_isload load
@@ -1007,7 +1065,7 @@ def check_p11(audit: Audit) -> None:
           join exprs expression on expression.id=generated.id
           group by expression.kind
           having (expression.kind=8 and n=1)
-              or (expression.kind=214 and n=9)
+              or (expression.kind=214 and n=13)
         )
         """,
         2,
@@ -1021,7 +1079,7 @@ def check_p11(audit: Audit) -> None:
           left join compgenerated generated on generated.id=expression.id
           where expression.kind between 210 and 214 and generated.id is null
           group by expression.kind
-          having (expression.kind=210 and n=5)
+          having (expression.kind=210 and n=6)
               or (expression.kind=211 and n=2)
               or (expression.kind=212 and n=1)
               or (expression.kind=213 and n=1)
