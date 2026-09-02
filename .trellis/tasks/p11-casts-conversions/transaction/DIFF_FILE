@@ -1,0 +1,276 @@
+diff --git a/src/core/processor/expr_processor.cc b/src/core/processor/expr_processor.cc
+index 5043fc2..a9153ac 100644
+--- a/src/core/processor/expr_processor.cc
++++ b/src/core/processor/expr_processor.cc
+@@ -1,4 +1,5 @@
+ #include "core/processor/expr_processor.h"
++#include "core/processor/specifier_processor.h"
+ #include "core/processor/type_processor.h"
+ #include "core/srcloc_recorder.h"
+ #include "db/dependency_manager.h"
+@@ -41,7 +42,7 @@ bool ExprProcessor::canProcessExprForReference(const Expr *expr) const {
+   return llvm::isa<DeclRefExpr, UnaryOperator, BinaryOperator,
+                    ConditionalOperator, StringLiteral, IntegerLiteral,
+                    FloatingLiteral, CharacterLiteral, CXXBoolLiteralExpr,
+-                   CallExpr, ImplicitCastExpr, ArraySubscriptExpr, InitListExpr,
++                   CallExpr, CastExpr, ParenExpr, ArraySubscriptExpr, InitListExpr,
+                    UnaryExprOrTypeTraitExpr>(expr);
+ }
+
+@@ -78,9 +79,10 @@ int ExprProcessor::getOrProcessExprId(const clang::Expr *expr) {
+     processBoolLiteral(boolLiteral);
+   } else if (const auto *callExpr = llvm::dyn_cast<CallExpr>(expr)) {
+     processCallExpr(callExpr);
+-  } else if (const auto *implicitCast =
+-                 llvm::dyn_cast<ImplicitCastExpr>(expr)) {
+-    processImplicitCastExpr(implicitCast);
++  } else if (const auto *castExpr = llvm::dyn_cast<CastExpr>(expr)) {
++    processCastExpr(castExpr);
++  } else if (const auto *parenExpr = llvm::dyn_cast<ParenExpr>(expr)) {
++    processParenExpr(parenExpr);
+   } else if (const auto *arraySubscript =
+                  llvm::dyn_cast<ArraySubscriptExpr>(expr)) {
+     processArraySubscriptExpr(arraySubscript);
+@@ -167,9 +169,35 @@ int ExprProcessor::processBaseExpr(Expr *expr, ExprKind exprKind) {
+
+   INSERT_EXPR_CACHE(exprKey, exprModel.id);
+   STG.insertClassObj(exprModel);
++  recordExprType(expr, exprModel.id);
+   return exprModel.id;
+ }
+
++void ExprProcessor::recordExprType(const Expr *expr, int exprId) {
++  if (!expr || exprId < 0 || !type_processor_)
++    return;
++
++  const QualType expressionType = expr->getType();
++  if (expressionType.isNull())
++    return;
++
++  const int typeId = type_processor_->processType(expressionType.getTypePtr());
++  if (typeId < 0)
++    return;
++
++  if (specifier_processor_)
++    specifier_processor_->processTypeQualifiers(typeId, expressionType);
++
++  int valueCategory = 1;
++  if (expr->isXValue())
++    valueCategory = 2;
++  else if (expr->isLValue())
++    valueCategory = 3;
++
++  DbModel::ExprType typeModel = {exprId, typeId, valueCategory};
++  STG.insertClassObj(typeModel);
++}
++
+ void ExprProcessor::processDeclRef(DeclRefExpr *expr) {
+   if (findCachedExprId(expr) != -1)
+     return;
+@@ -199,6 +227,20 @@ void ExprProcessor::processDeclRef(DeclRefExpr *expr) {
+   // (CallExpr + FunBind, enumconstants, etc.) and should not become VARACCESS.
+ }
+
++void ExprProcessor::processMemberExpr(const MemberExpr *expr) {
++  if (!expr || findCachedExprId(expr) != -1)
++    return;
++
++  const int exprId =
++      processBaseExpr(const_cast<MemberExpr *>(expr), ExprKind::CALLEXPR);
++  recordExprParent(expr->getBase(), -1, exprId);
++
++  const IsCallKind readKind = expr->isArrow() ? IsCallKind::MBRPTRREADEXPR
++                                               : IsCallKind::MBRREADEXPR;
++  DbModel::IsCall isCallModel = {exprId, static_cast<int>(readKind)};
++  STG.insertClassObj(isCallModel);
++}
++
+ void ExprProcessor::processUnaryOperator(const UnaryOperator *op) {
+   if (findCachedExprId(op) != -1)
+     return;
+@@ -639,18 +681,172 @@ void ExprProcessor::processCallExpr(const CallExpr *expr) {
+   STG.insertClassObj(isCallModel);
+ }
+
+-void ExprProcessor::processImplicitCastExpr(const ImplicitCastExpr *ICE) {
+-  if (!ICE)
++void ExprProcessor::processCastTypes(const CastExpr *castExpr) {
++  if (!castExpr || !type_processor_)
+     return;
+
+-  if (findCachedExprId(ICE) != -1)
++  const QualType sourceType = castExpr->getSubExpr()->getType();
++  const QualType targetType = castExpr->getType();
++  const int sourceTypeId = type_processor_->processType(sourceType.getTypePtr());
++  const int targetTypeId = type_processor_->processType(targetType.getTypePtr());
++
++  if (specifier_processor_) {
++    if (sourceTypeId >= 0)
++      specifier_processor_->processTypeQualifiers(sourceTypeId, sourceType);
++    if (targetTypeId >= 0)
++      specifier_processor_->processTypeQualifiers(targetTypeId, targetType);
++  }
++}
++
++void ExprProcessor::recordExprConv(int convertedId, int conversionId) {
++  if (convertedId < 0 || conversionId < 0)
+     return;
++  DbModel::ExprConv conversionModel = {convertedId, conversionId};
++  STG.insertClassObj(conversionModel);
++}
++
++void ExprProcessor::recordExprIsLoad(int exprId) {
++  if (exprId < 0 || !recorded_loads_.insert(exprId).second)
++    return;
++  DbModel::ExprIsLoad loadModel = {exprId};
++  STG.insertClassObj(loadModel);
++}
++
++void ExprProcessor::recordCompGenerated(int exprId) {
++  if (exprId < 0)
++    return;
++  DbModel::CompGenerated generatedModel = {exprId};
++  STG.insertClassObj(generatedModel);
++}
++
++void ExprProcessor::recordConversionKind(int exprId, int kind) {
++  if (exprId < 0)
++    return;
++  DbModel::ConversionKind kindModel = {exprId, kind};
++  STG.insertClassObj(kindModel);
++}
++
++ExprKind ExprProcessor::classifyCastExprKind(const CastExpr *castExpr) const {
++  if (llvm::isa<CXXStaticCastExpr>(castExpr))
++    return ExprKind::STATIC_CAST;
++  if (llvm::isa<CXXReinterpretCastExpr>(castExpr))
++    return ExprKind::REINTERPRET_CAST;
++  if (llvm::isa<CXXConstCastExpr>(castExpr))
++    return ExprKind::CONST_CAST;
++  if (llvm::isa<CXXDynamicCastExpr>(castExpr))
++    return ExprKind::DYNAMIC_CAST;
++  return ExprKind::C_STYLE_CAST;
++}
++
++int ExprProcessor::classifyConversionKind(const CastExpr *castExpr) const {
++  if (!castExpr)
++    return 0;
++
++  const QualType sourceType = castExpr->getSubExpr()->getType();
++  const QualType targetType = castExpr->getType();
++  if (targetType->isBooleanType())
++    return 1;
++
++  switch (castExpr->getCastKind()) {
++  case CK_DerivedToBase:
++    return 2;
++  case CK_BaseToDerived:
++    return 3;
++  case CK_DerivedToBaseMemberPointer:
++    return 4;
++  case CK_BaseToDerivedMemberPointer:
++    return 5;
++  default:
++    break;
++  }
++
++  const bool sourceClass = sourceType->isRecordType();
++  const bool targetClass = targetType->isRecordType();
++  if (sourceClass && targetClass && castExpr->getSubExpr()->isGLValue() &&
++      castExpr->isGLValue())
++    return 6;
++
++  if (sourceClass && targetClass && castExpr->getSubExpr()->isPRValue() &&
++      castExpr->isPRValue() && ast_context_->hasSameUnqualifiedType(
++                                      sourceType, targetType))
++    return 7;
++
++  return 0;
++}
++
++int ExprProcessor::processCastExpr(const CastExpr *castExpr) {
++  if (!castExpr || !castExpr->getSubExpr() ||
++      llvm::isa<BuiltinBitCastExpr>(castExpr) ||
++      castExpr->isTypeDependent() || castExpr->isValueDependent() ||
++      castExpr->isInstantiationDependent() ||
++      castExpr->containsUnexpandedParameterPack())
++    return -1;
++
++  if (const int cachedId = findCachedExprId(castExpr); cachedId != -1)
++    return cachedId;
+
+-  ExprKind exprKind = ExprKind::NOOPEXPR;
+-  if (ICE->getCastKind() == CK_ArrayToPointerDecay)
++  processCastTypes(castExpr);
++  int convertedId = getOrProcessExprId(castExpr->getSubExpr());
++  if (convertedId < 0) {
++    if (const auto *memberExpr =
++            llvm::dyn_cast<MemberExpr>(castExpr->getSubExpr())) {
++      processMemberExpr(memberExpr);
++      convertedId = findCachedExprId(memberExpr);
++    }
++  }
++  if (convertedId < 0)
++    return -1;
++
++  const auto *implicitCast = llvm::dyn_cast<ImplicitCastExpr>(castExpr);
++  if (implicitCast && implicitCast->getCastKind() == CK_LValueToRValue) {
++    int loadExprId = getOrProcessMainTreeExprId(implicitCast->getSubExpr());
++    if (loadExprId < 0)
++      loadExprId = convertedId;
++    if (loadExprId < 0)
++      return -1;
++    INSERT_EXPR_CACHE(KeyGen::Expr_::makeKey(castExpr, ast_context_),
++                      loadExprId);
++    recordExprIsLoad(loadExprId);
++    return loadExprId;
++  }
++
++  ExprKind exprKind = classifyCastExprKind(castExpr);
++  if (implicitCast && implicitCast->getCastKind() == CK_ArrayToPointerDecay)
+     exprKind = ExprKind::ARRAY_TO_POINTER;
+
+-  processBaseExpr(const_cast<ImplicitCastExpr *>(ICE), exprKind);
++  const int conversionId =
++      processBaseExpr(const_cast<CastExpr *>(castExpr), exprKind);
++  recordExprConv(convertedId, conversionId);
++
++  if (implicitCast) {
++    recordCompGenerated(conversionId);
++    if (exprKind == ExprKind::C_STYLE_CAST)
++      recordConversionKind(conversionId, classifyConversionKind(castExpr));
++  } else {
++    recordConversionKind(conversionId, classifyConversionKind(castExpr));
++  }
++
++  return conversionId;
++}
++
++int ExprProcessor::processParenExpr(const ParenExpr *parenExpr) {
++  if (!parenExpr || !parenExpr->getSubExpr() ||
++      parenExpr->isTypeDependent() || parenExpr->isValueDependent() ||
++      parenExpr->isInstantiationDependent() ||
++      parenExpr->containsUnexpandedParameterPack())
++    return -1;
++
++  if (const int cachedId = findCachedExprId(parenExpr); cachedId != -1)
++    return cachedId;
++
++  const int convertedId = getOrProcessExprId(parenExpr->getSubExpr());
++  if (convertedId < 0)
++    return -1;
++
++  const int conversionId =
++      processBaseExpr(const_cast<ParenExpr *>(parenExpr), ExprKind::PAREXPR);
++  recordExprConv(convertedId, conversionId);
++  return conversionId;
+ }
+
+ void ExprProcessor::processArraySubscriptExpr(const ArraySubscriptExpr *expr) {
+@@ -860,6 +1056,7 @@ int ExprProcessor::processConceptSpecializationExpr(
+
+   INSERT_EXPR_CACHE(exprKey, exprModel.id);
+   STG.insertClassObj(exprModel);
++  recordExprType(expr, exprModel.id);
+   return exprModel.id;
+ }

@@ -147,15 +147,15 @@ DONE   143. virtual_base_offsets
 DONE  144. frienddecls
   145. comments
   146. commentbinding
-  147. exprconv
-  148. compgenerated
+DONE   147. exprconv
+DONE   148. compgenerated
   149. synthetic_destructor_call
 DONE   150. namespaces
 DONE   151. namespace_inline
 DONE   152. namespacembrs
 DONE   153. exprparents
-  154. expr_isload
-  155. conversionkinds
+DONE   154. expr_isload
+DONE   155. conversionkinds
 DONE   156. iscall
   157. numtemplatearguments
   158. specialnamequalifyingelements
@@ -178,7 +178,7 @@ DONE   174. braced_initialisers
   175. expr_ancestor
 DONE   176. exprs
   177. expr_reuse
-  178. expr_types
+DONE   178. expr_types
   179. compound_requirement_is_noexcept
   180. new_allocated_type
   181. new_array_allocated_type

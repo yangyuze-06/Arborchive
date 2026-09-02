@@ -37,6 +37,7 @@ phase 应只覆盖一个清晰的 AST/语义边界，优先做到：
 | P2 template system phase | template declaration markers, instantiations, arguments, value extraction safe subset, variable templates, template-template arguments, concept templates | 96-99, 102-109, 111, 113, 114, 116 | `9f395d6`, `f655a10`, `2e02b8a`, `b93ffa6`, `9770870`, `eb7035f`, `9a2c2fc`, `d6323a2` | stage complete |
 | P3 template / concept closure | constraint expr extraction, type constraint binding, template-template semantics, non-type/value template argument support, deferred feasibility | 90, 91, 96-111 except 112, 113-117 | see P3 process notes | done / verified |
 | P4 namespace / using / ownership | canonical namespace identity, namespace_decls extraction, using declarations/directives, lexical ownership (using_container) | `namespaces`(150), `namespace_inline`(151), `namespacembrs`(152), `namespace_decls`(68), `usings`(69), `using_container`(70) | `78e1a2b`, `7baaab1`, `9f9ec24` | stage complete |
+| P11 casts / conversions | conversion graph, expression types/categories, loads, implicit/explicit cast semantics | `exprconv`(147), `compgenerated`(148), `expr_isload`(154), `conversionkinds`(155), `expr_types`(178) | `5808032`, `701fca1`, `c8af902` | done / verified |
 
 ### Template / Concept Closure
 
@@ -216,7 +217,27 @@ P7 先抽取 attribute presence graph，再处理 argument system。presence 与
 
 - Focus: `conversionkinds`、implicit casts、explicit casts
 - Complexity: Medium-High
-- Boundary: 与 P0 `derivedtypes` 历史记录保持兼容，后续补全 conversion kind 和显式 cast 语义。
+- Status: DONE
+- Scope: 新增 CodeQL 对齐的 `exprconv`、`expr_types`、`expr_isload`、
+  `compgenerated`、`conversionkinds`。`exprconv` 固定从被转换表达式指向
+  wrapper；`exprparents` 继续排除所有 conversion wrapper。
+- Implicit conversions: `CK_LValueToRValue` 只标记主表达式 load；数组衰减
+  使用 kind 8；其余支持范围内的非 dependent 隐式 cast 使用 kind 214，
+  并写入 `conversionkinds`。隐式 wrapper 写 `compgenerated`。
+- Explicit conversions: `static_cast`/`reinterpret_cast`/`const_cast`/
+  `dynamic_cast`/C-style 与 functional cast 分别使用 210–214；每个显式
+  cast 恰有一个 `conversionkinds` 行且不写 `compgenerated`。
+- Expression metadata: 每个受支持表达式写入一个 `expr_types` 行，值类别
+  固定为 prvalue 1、xvalue 2、lvalue 3。仅 conversion key 追加 AST 类别、
+  CastKind、源/目标类型和值类别，非 conversion key 保持原行为。
+- Validation: `tests/unit-tests/p11/casts_conversion_case.cc` 与
+  `scripts/assert_test_db.py` 覆盖嵌套链、load、数组衰减、bool/数值、继承、
+  member pointer、五类显式 cast、值类别、引用完整性和 conversion/main-tree
+  隔离；LLVM 19 build 与 `scripts/test_all.sh` 通过。
+- Deferred: dependent cast、`reference_to`、`ref_indirect`、`temp_init`、
+  C11 generic、ObjC/address-space 专用转换和 `BuiltinBitCastExpr`。
+- Migration: 支持范围内原 kind 217 隐式 cast 改为 CodeQL cast kind 214；
+  schema 新增五张表，旧数据库必须重建。
 
 ### P12: Allocation & Lifetime System
 
