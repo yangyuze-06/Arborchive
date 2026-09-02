@@ -1,7 +1,7 @@
-P11 CASTS & CONVERSION SYSTEM VERIFICATION
+P11 REVIEW FIX VERIFICATION
 
 CHANGED_BRANCH: codex/p11-casts-conversions
-CHANGED_FIELD: ExprProcessor::processCastExpr / exprconv(converted, conversion)
+CHANGED_FIELD: ExprProcessor::processCastExpr LValueToRValue cache/return and conversion-source identity
 
 ARTIFACTS:
 MODIFIED_FILE=/Users/y4n9/Workspace/Projects/My-github-projects/Arborchive/.trellis/tasks/p11-casts-conversions/transaction/MODIFIED_FILE
@@ -10,27 +10,27 @@ VERIFICATION.txt=/Users/y4n9/Workspace/Projects/My-github-projects/Arborchive/.t
 ROLLBACK.sh=/Users/y4n9/Workspace/Projects/My-github-projects/Arborchive/.trellis/tasks/p11-casts-conversions/transaction/ROLLBACK.sh
 
 HASHES:
-ORIGINAL_SHA256=7dcf6cbcb926c7dd3244f8d91db4a0fd4496ec3236f2a7c16ee6c2f3b38ec1d6
-MODIFIED_SHA256=4607a14249a67b63693fce7362278f79a07cf51b7935318c2b627d83df64eccd
-MODIFIED_AFTER_ROLLBACK_TEST_SHA256=4607a14249a67b63693fce7362278f79a07cf51b7935318c2b627d83df64eccd
-ROLLBACK_COPY_SHA256=7dcf6cbcb926c7dd3244f8d91db4a0fd4496ec3236f2a7c16ee6c2f3b38ec1d6
+ORIGINAL_SHA256=4607a14249a67b63693fce7362278f79a07cf51b7935318c2b627d83df64eccd
+MODIFIED_SHA256=8b2fb624630563287e946776a327f2d03ba4184977673205000f3e5a1b30d45a
+MODIFIED_AFTER_ROLLBACK_TEST_SHA256=8b2fb624630563287e946776a327f2d03ba4184977673205000f3e5a1b30d45a
+ROLLBACK_COPY_SHA256=4607a14249a67b63693fce7362278f79a07cf51b7935318c2b627d83df64eccd
 
 BASELINE:
 COMMAND=scripts/test_all.sh
-INPUT=repository code at b3c4f5e (P10), config.example.toml and registered tests through P10
+INPUT=dbd9972 P11 implementation before review fixes
 LITERAL_RESULT=[test_all] All checks passed.
 EXIT_STATUS=0
 
 MODIFIED:
 COMMAND=scripts/test_all.sh
-INPUT=codex/p11-casts-conversions with P11 fixture and CodeQL conversion tables
+INPUT=c758144 with ordered paren/load chain and routine/this/nullptr conversion sources
 LITERAL_RESULT=[test_all] All checks passed.
 EXIT_STATUS=0
 
 ROLLBACK:
-COMMAND=/Users/y4n9/Workspace/Projects/My-github-projects/Arborchive/.trellis/tasks/p11-casts-conversions/transaction/ROLLBACK.sh /tmp/p11-rollback-copy
+COMMAND=/Users/y4n9/Workspace/Projects/My-github-projects/Arborchive/.trellis/tasks/p11-casts-conversions/transaction/ROLLBACK.sh /tmp/p11-review-rollback
 INPUT=copy of MODIFIED_FILE
-LITERAL_OUTPUT=ROLLBACK_RESTORED sha=7dcf6cbcb926c7dd3244f8d91db4a0fd4496ec3236f2a7c16ee6c2f3b38ec1d6 behavior=VisitImplicitCastExpr
+LITERAL_OUTPUT=ROLLBACK_RESTORED sha=4607a14249a67b63693fce7362278f79a07cf51b7935318c2b627d83df64eccd behavior=pre-fix-load-chain
 EXIT_STATUS=0
-RESTORED_BEHAVIOR=copy contains processImplicitCastExpr; SHA-256 equals ORIGINAL_SHA256
+RESTORED_BEHAVIOR=copy returns loadExprId for CK_LValueToRValue; SHA-256 equals ORIGINAL_SHA256
 RESTORED_STATUS=verified on rollback copy; MODIFIED_FILE remains changed

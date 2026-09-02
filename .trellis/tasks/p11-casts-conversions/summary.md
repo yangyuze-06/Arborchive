@@ -17,12 +17,16 @@ DONE on `codex/p11-casts-conversions`.
 - Classified conversion semantics as kinds 0–7 and kept implicit/explicit
   `compgenerated` behavior separate.
 - Preserved the P10 main-expression graph boundary.
+- Review fixes preserve parentheses across load conversions, materialize
+  routine/`this`/`nullptr` conversion sources, and classify unchecked
+  derived-to-base conversions as kind 2.
 
 ## commits
 
 - `5808032 feat(db): add P11 conversion fact tables`
 - `701fca1 feat(expr): extract P11 cast conversion semantics`
 - `c8af902 test(p11): verify cast conversion closure`
+- `c758144 fix(expr): preserve P11 conversion source chains`
 
 ## verification
 
@@ -30,8 +34,8 @@ DONE on `codex/p11-casts-conversions`.
 - LLVM 19 debug build: PASS.
 - P11 targeted SQLite assertions: PASS, 0 warnings.
 - Full `scripts/test_all.sh`: PASS.
-- P11 database: 167 tables, 44 expressions, 24 conversion edges, 44 type
-  rows, 15 loads, 10 generated nodes, and 21 conversion-kind rows.
+- P11 database: 167 tables, 56 expressions, 30 conversion edges, 56 type
+  rows, 18 loads, 14 generated nodes, and 26 conversion-kind rows.
 - Rollback on a copy restored the original hash and behavior; the transaction
   modified artifact remains changed.
 
@@ -41,4 +45,6 @@ DONE on `codex/p11-casts-conversions`.
   C11 generic, Objective-C/address-space casts, and `BuiltinBitCastExpr`.
 - Conversion kind 7 is implemented but is not forced through a temporary
   construction fixture because `temp_init` remains explicitly deferred.
+- Constructor-backed class functional casts remain deferred with `temp_init`;
+  scalar functional casts remain covered by P11.
 - Existing third-party compiler warnings remain unchanged.

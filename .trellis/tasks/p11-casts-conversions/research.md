@@ -43,8 +43,14 @@ therefore requires rebuilding old databases.
   reads only when an implicit conversion needs a concrete converted endpoint;
   this preserves P8 aggregate initializer references without opening a general
   member-expression roadmap phase.
+- Review follow-up adds narrow conversion-source identities for routine
+  references, `this`, and `nullptr`. The new `this` key suffix applies only to
+  a previously unsupported expression and prevents collision with its
+  same-location `MemberExpr`; established non-conversion keys are unchanged.
 
 ## deferred
 
 Dependent casts, reference wrappers, temporary initialization, C11 generic,
 Objective-C/address-space casts, and `BuiltinBitCastExpr` stay outside P11.
+Constructor-backed class functional casts remain part of the deferred
+`temp_init` boundary; scalar functional casts are covered by P11.

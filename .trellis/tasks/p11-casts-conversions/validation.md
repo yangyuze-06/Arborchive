@@ -38,6 +38,10 @@ RESULT: [test_all] All checks passed.
 EXIT: 0
 ```
 
+Review-fix baseline and modified runs repeated the same full command and both
+returned `[test_all] All checks passed.` with exit status 0. The LLVM 19 rebuild
+also completed with exit status 0.
+
 An intermediate modified run exposed two P8 aggregate initializer orphans.
 The cause was an implicit lvalue-to-rvalue conversion whose direct source was
 an already-valid field read that lacked an on-demand expression identity. The
@@ -50,25 +54,25 @@ Database:
 `tests/output/unit-tests-p11-casts_conversion_case.db`
 
 ```text
-exprs            44
-exprconv         24
-expr_types       44
-expr_isload      15
-compgenerated    10
-conversionkinds  21
+exprs            56
+exprconv         30
+expr_types       56
+expr_isload      18
+compgenerated    14
+conversionkinds  26
 ```
 
-Value categories: prvalue 23, xvalue 1, lvalue 20. Conversion-kind evidence
+Value categories: prvalue 30, xvalue 1, lvalue 25. Conversion-kind evidence
 covers 0–6, including bool, both inheritance directions, both member-pointer
 directions, and non-inheritance class glvalue adjustment. Assertions also prove
-one type row per expression, one conversion-kind row per kind 210–214 cast,
-nested conversion edges, generated/explicit separation, absence of kind 217,
-and exclusion of conversion nodes from `exprparents`.
+exactly one type row per expression, one conversion-kind row per kind 210–214
+cast, the exact `VARACCESS -> ParenExpr -> implicit 214 -> static_cast 210`
+chain, function-to-pointer decay, `nullptr`, unchecked derived-to-base,
+generated/explicit separation, absence of kind 217, and exclusion of conversion
+nodes from `exprparents`.
 
 ## rollback evidence
 
-The executable transaction rollback was run against a copy. It restored SHA-256
-`7dcf6cbcb926c7dd3244f8d91db4a0fd4496ec3236f2a7c16ee6c2f3b38ec1d6`
-and the legacy `processImplicitCastExpr` behavior while the recorded
-`MODIFIED_FILE` retained SHA-256
-`4607a14249a67b63693fce7362278f79a07cf51b7935318c2b627d83df64eccd`.
+The transaction artifacts are refreshed after the review fix. The executable
+rollback restores the pre-fix `dbd9972` processor on a copy while the recorded
+`MODIFIED_FILE` remains on the corrected chain/source behavior.
