@@ -113,7 +113,8 @@ public:
   bool VisitUnaryOperator(const clang::UnaryOperator *op);
   bool VisitBinaryOperator(const clang::BinaryOperator *op);
   bool VisitConditionalOperator(const clang::ConditionalOperator *op);
-  bool VisitImplicitCastExpr(clang::ImplicitCastExpr *ICE);
+  bool VisitCastExpr(clang::CastExpr *castExpr);
+  bool VisitParenExpr(clang::ParenExpr *parenExpr);
   bool VisitArraySubscriptExpr(clang::ArraySubscriptExpr *expr);
   bool VisitInitListExpr(clang::InitListExpr *expr);
   bool VisitUnaryExprOrTypeTraitExpr(clang::UnaryExprOrTypeTraitExpr *expr);
