@@ -65,12 +65,13 @@ void ASTVisitor::initProcessors() {
   namespace_processor_ = std::make_unique<NamespaceProcessor>(context_, pp_);
   variable_processor_ = std::make_unique<VariableProcessor>(context_, pp_);
   type_processor_ = std::make_unique<TypeProcessor>(context_, pp_);
-  expr_processor_ = std::make_unique<ExprProcessor>(context_, pp_, type_processor_.get());
+  specifier_processor_ = std::make_unique<SpecifierProcessor>(context_, pp_);
+  expr_processor_ = std::make_unique<ExprProcessor>(
+      context_, pp_, type_processor_.get(), specifier_processor_.get());
   stmt_processor_ =
       std::make_unique<StmtProcessor>(context_, pp_, expr_processor_.get());
   attribute_processor_ =
       std::make_unique<AttributeProcessor>(context_, pp_, expr_processor_.get());
-  specifier_processor_ = std::make_unique<SpecifierProcessor>(context_, pp_);
   template_processor_ = std::make_unique<TemplateProcessor>(
       context_, pp_, type_processor_.get(), expr_processor_.get(),
       variable_processor_.get());
@@ -268,20 +269,17 @@ bool ASTVisitor::VisitBuiltinType(clang::BuiltinType *BT) {
   return true;
 }
 
-bool ASTVisitor::VisitImplicitCastExpr(clang::ImplicitCastExpr *ICE) {
-  if (!ICE || !ICE->getSubExpr())
+bool ASTVisitor::VisitCastExpr(clang::CastExpr *castExpr) {
+  if (!castExpr)
     return true;
+  expr_processor_->processCastExpr(castExpr);
+  return true;
+}
 
-  expr_processor_->processImplicitCastExpr(ICE);
-
-  const clang::QualType sourceType = ICE->getSubExpr()->getType();
-  const clang::QualType targetType = ICE->getType();
-
-  int source_type_id = type_processor_->processType(sourceType.getTypePtr());
-  specifier_processor_->processTypeQualifiers(source_type_id, sourceType);
-
-  int target_type_id = type_processor_->processType(targetType.getTypePtr());
-  specifier_processor_->processTypeQualifiers(target_type_id, targetType);
+bool ASTVisitor::VisitParenExpr(clang::ParenExpr *parenExpr) {
+  if (!parenExpr)
+    return true;
+  expr_processor_->processParenExpr(parenExpr);
   return true;
 }
 

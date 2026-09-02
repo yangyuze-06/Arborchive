@@ -14,6 +14,7 @@
 using namespace clang;
 
 class TypeProcessor;
+class SpecifierProcessor;
 
 class ExprProcessor : public BaseProcessor {
 public:
@@ -27,6 +28,7 @@ public:
   void recordExprParentId(int childId, int childIndex, int parentId);
 
   void processDeclRef(DeclRefExpr *expr);
+  void processMemberExpr(const MemberExpr *expr);
 
   void processUnaryOperator(const UnaryOperator *op);
   void processBinaryOperator(const BinaryOperator *op);
@@ -46,7 +48,8 @@ public:
   void processAssignExpr(const BinaryOperator *op);
   void processCallExpr(const CallExpr *expr);
 
-  void processImplicitCastExpr(const ImplicitCastExpr *ICE);
+  int processCastExpr(const CastExpr *castExpr);
+  int processParenExpr(const ParenExpr *parenExpr);
 
   void processArraySubscriptExpr(const ArraySubscriptExpr *expr);
   void processInitListExpr(const InitListExpr *expr);
@@ -55,8 +58,11 @@ public:
       const ConceptSpecializationExpr *expr, int conceptId);
   int processNonTypeTemplateParmDecl(const NonTypeTemplateParmDecl *decl);
 
-  ExprProcessor(ASTContext *ast_context, const PrintingPolicy pp, TypeProcessor *tp = nullptr)
-      : BaseProcessor(ast_context, pp), type_processor_(tp) {};
+  ExprProcessor(ASTContext *ast_context, const PrintingPolicy pp,
+                TypeProcessor *tp = nullptr,
+                SpecifierProcessor *sp = nullptr)
+      : BaseProcessor(ast_context, pp), type_processor_(tp),
+        specifier_processor_(sp) {};
   ~ExprProcessor() = default;
 
 private:
@@ -69,6 +75,17 @@ private:
   bool canProcessExprForReference(const Expr *expr) const;
 
   int processBaseExpr(Expr *expr, ExprKind exprKind);
+  int getOrProcessConversionSourceId(const Expr *expr);
+  int processFunctionReference(const DeclRefExpr *expr);
+  int processThisExpr(const CXXThisExpr *expr);
+  void recordExprType(const Expr *expr, int exprId);
+  void processCastTypes(const CastExpr *castExpr);
+  void recordExprConv(int convertedId, int conversionId);
+  void recordExprIsLoad(int exprId);
+  void recordCompGenerated(int exprId);
+  void recordConversionKind(int exprId, int kind);
+  int classifyConversionKind(const CastExpr *castExpr) const;
+  ExprKind classifyCastExprKind(const CastExpr *castExpr) const;
 
   int processLiteralValue(const std::string &value, const std::string &text,
                           int exprId);
@@ -82,8 +99,10 @@ private:
   void recordCallChildren(const CallExpr *expr, int parentId);
 
   std::unordered_set<std::string> recorded_parent_edges_;
+  std::unordered_set<int> recorded_loads_;
 
   TypeProcessor *type_processor_ = nullptr;
+  SpecifierProcessor *specifier_processor_ = nullptr;
 };
 
 #endif // _EXPR_PROCESSOR_H_

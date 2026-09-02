@@ -284,6 +284,31 @@ struct ExprParent {
   int parent_id;
 };
 
+// CodeQL conversion edge: converted expression -> conversion wrapper.
+struct ExprConv {
+  int converted;
+  int conversion;
+};
+
+struct ExprType {
+  int id;
+  int typeid_;
+  int value_category;
+};
+
+struct ExprIsLoad {
+  int expr_id;
+};
+
+struct CompGenerated {
+  int id;
+};
+
+struct ConversionKind {
+  int expr_id;
+  int kind;
+};
+
 struct FunBind {
   int expr;
   int fun;

@@ -28,7 +28,11 @@ int TypeProcessor::processType(const Type *T) {
   const clang::Type *type = qualType.getTypePtr();
 
   // Directly return specific type IDs instead of creating Type intermediary
-  if (const auto derived_result = analyzeDerivedType(type)) {
+  if (const auto *builtinType = llvm::dyn_cast<BuiltinType>(type)) {
+    _typeId = processBuiltinType(builtinType, ast_context_);
+  } else if (const auto *recordType = llvm::dyn_cast<RecordType>(type)) {
+    _typeId = processRecordDeclType(recordType->getDecl());
+  } else if (const auto derived_result = analyzeDerivedType(type)) {
     _typeId = processDerivedType(type, derived_result, ast_context_);
   } else if (type->isEnumeralType() || type->isTypedefNameType()) {
     _typeId = processUserType(type, ast_context_);

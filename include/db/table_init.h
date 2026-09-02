@@ -160,6 +160,11 @@ inline auto initStorage(const std::string &path) {
       // Expr Tables;
       ExprTableFn::exprs(),
       ExprTableFn::exprparents(),
+      ExprTableFn::exprconv(),
+      ExprTableFn::expr_types(),
+      ExprTableFn::expr_isload(),
+      ExprTableFn::compgenerated(),
+      ExprTableFn::conversionkinds(),
       ExprTableFn::funbind(),
       ExprTableFn::iscall(),
       ExprTableFn::varbind(),

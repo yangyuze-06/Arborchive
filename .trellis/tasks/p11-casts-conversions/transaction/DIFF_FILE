@@ -1,0 +1,315 @@
+diff --git a/include/core/processor/expr_processor.h b/include/core/processor/expr_processor.h
+index 214197c..261db34 100644
+--- a/include/core/processor/expr_processor.h
++++ b/include/core/processor/expr_processor.h
+@@ -75,6 +75,9 @@ private:
+   bool canProcessExprForReference(const Expr *expr) const;
+
+   int processBaseExpr(Expr *expr, ExprKind exprKind);
++  int getOrProcessConversionSourceId(const Expr *expr);
++  int processFunctionReference(const DeclRefExpr *expr);
++  int processThisExpr(const CXXThisExpr *expr);
+   void recordExprType(const Expr *expr, int exprId);
+   void processCastTypes(const CastExpr *castExpr);
+   void recordExprConv(int convertedId, int conversionId);
+diff --git a/scripts/assert_test_db.py b/scripts/assert_test_db.py
+index dcf0be6..2ef445e 100755
+--- a/scripts/assert_test_db.py
++++ b/scripts/assert_test_db.py
+@@ -914,12 +914,12 @@ def check_p10(audit: Audit) -> None:
+
+ def check_p11(audit: Audit) -> None:
+     expected_counts = {
+-        "exprs": 44,
+-        "exprconv": 24,
+-        "expr_types": 44,
+-        "expr_isload": 15,
+-        "compgenerated": 10,
+-        "conversionkinds": 21,
++        "exprs": 56,
++        "exprconv": 30,
++        "expr_types": 56,
++        "expr_isload": 18,
++        "compgenerated": 14,
++        "conversionkinds": 26,
+     }
+     for table, expected in expected_counts.items():
+         check_count(audit, table, expected)
+@@ -936,9 +936,12 @@ def check_p11(audit: Audit) -> None:
+     audit.check(
+         "every expression has one type/category row",
+         """
+-        select count(*) from exprs expression
+-        left join expr_types typed on typed.id=expression.id
+-        where typed.id is null
++        select count(*) from (
++          select expression.id
++          from exprs expression
++          left join expr_types typed on typed.id=expression.id
++          group by expression.id having count(typed.id)<>1
++        )
+         """,
+         0,
+     )
+@@ -988,6 +991,61 @@ def check_p11(audit: Audit) -> None:
+         """,
+         1,
+     )
++    audit.check(
++        "paren load conversion chain order",
++        """
++        select count(*) from exprconv paren_edge
++        join exprs source
++          on source.id=paren_edge.converted and source.kind=84
++        join exprs paren
++          on paren.id=paren_edge.conversion and paren.kind=12
++        join exprconv implicit_edge on implicit_edge.converted=paren.id
++        join exprs implicit_cast
++          on implicit_cast.id=implicit_edge.conversion
++         and implicit_cast.kind=214
++        join exprconv explicit_edge
++          on explicit_edge.converted=implicit_cast.id
++        join exprs explicit_cast
++          on explicit_cast.id=explicit_edge.conversion
++         and explicit_cast.kind=210
++        """,
++        1,
++    )
++    audit.check(
++        "function-to-pointer decay source",
++        """
++        select count(*) from exprconv relation
++        join exprs source on source.id=relation.converted and source.kind=97
++        join exprs conversion
++          on conversion.id=relation.conversion and conversion.kind=214
++        join compgenerated generated on generated.id=conversion.id
++        """,
++        1,
++    )
++    audit.check(
++        "nullptr implicit conversion source",
++        """
++        select count(*) from exprconv relation
++        join exprs source on source.id=relation.converted and source.kind=123
++        join exprs conversion
++          on conversion.id=relation.conversion and conversion.kind=214
++        join conversionkinds kind
++          on kind.expr_id=conversion.id and kind.kind=0
++        join compgenerated generated on generated.id=conversion.id
++        """,
++        1,
++    )
++    audit.check(
++        "unchecked derived-to-base conversion kind",
++        """
++        select count(*) from exprconv relation
++        join exprs source on source.id=relation.converted and source.kind=85
++        join conversionkinds kind
++          on kind.expr_id=relation.conversion and kind.kind=2
++        join compgenerated generated on generated.id=relation.conversion
++        """,
++        1,
++    )
+     audit.check(
+         "load markers resolve to non-wrapper expressions",
+         """
+@@ -1007,7 +1065,7 @@ def check_p11(audit: Audit) -> None:
+           join exprs expression on expression.id=generated.id
+           group by expression.kind
+           having (expression.kind=8 and n=1)
+-              or (expression.kind=214 and n=9)
++              or (expression.kind=214 and n=13)
+         )
+         """,
+         2,
+@@ -1021,7 +1079,7 @@ def check_p11(audit: Audit) -> None:
+           left join compgenerated generated on generated.id=expression.id
+           where expression.kind between 210 and 214 and generated.id is null
+           group by expression.kind
+-          having (expression.kind=210 and n=5)
++          having (expression.kind=210 and n=6)
+               or (expression.kind=211 and n=2)
+               or (expression.kind=212 and n=1)
+               or (expression.kind=213 and n=1)
+diff --git a/src/core/processor/expr_processor.cc b/src/core/processor/expr_processor.cc
+index a9153ac..c0b6bfb 100644
+--- a/src/core/processor/expr_processor.cc
++++ b/src/core/processor/expr_processor.cc
+@@ -42,7 +42,9 @@ bool ExprProcessor::canProcessExprForReference(const Expr *expr) const {
+   return llvm::isa<DeclRefExpr, UnaryOperator, BinaryOperator,
+                    ConditionalOperator, StringLiteral, IntegerLiteral,
+                    FloatingLiteral, CharacterLiteral, CXXBoolLiteralExpr,
+-                   CallExpr, CastExpr, ParenExpr, ArraySubscriptExpr, InitListExpr,
++                   CXXNullPtrLiteralExpr,
++                   CallExpr, CastExpr, ParenExpr, CXXThisExpr,
++                   ArraySubscriptExpr, InitListExpr,
+                    UnaryExprOrTypeTraitExpr>(expr);
+ }
+
+@@ -55,6 +57,8 @@ int ExprProcessor::getOrProcessExprId(const clang::Expr *expr) {
+
+   if (const auto *declRef = llvm::dyn_cast<DeclRefExpr>(expr)) {
+     processDeclRef(const_cast<DeclRefExpr *>(declRef));
++  } else if (const auto *thisExpr = llvm::dyn_cast<CXXThisExpr>(expr)) {
++    processThisExpr(thisExpr);
+   } else if (const auto *unary = llvm::dyn_cast<UnaryOperator>(expr)) {
+     processUnaryOperator(unary);
+   } else if (const auto *binary = llvm::dyn_cast<BinaryOperator>(expr)) {
+@@ -77,6 +81,10 @@ int ExprProcessor::getOrProcessExprId(const clang::Expr *expr) {
+   } else if (const auto *boolLiteral =
+                  llvm::dyn_cast<CXXBoolLiteralExpr>(expr)) {
+     processBoolLiteral(boolLiteral);
++  } else if (const auto *nullLiteral =
++                 llvm::dyn_cast<CXXNullPtrLiteralExpr>(expr)) {
++    processBaseExpr(const_cast<CXXNullPtrLiteralExpr *>(nullLiteral),
++                    ExprKind::LITERAL);
+   } else if (const auto *callExpr = llvm::dyn_cast<CallExpr>(expr)) {
+     processCallExpr(callExpr);
+   } else if (const auto *castExpr = llvm::dyn_cast<CastExpr>(expr)) {
+@@ -173,6 +181,61 @@ int ExprProcessor::processBaseExpr(Expr *expr, ExprKind exprKind) {
+   return exprModel.id;
+ }
+
++int ExprProcessor::processFunctionReference(const DeclRefExpr *expr) {
++  if (!expr)
++    return -1;
++  if (const int cachedId = findCachedExprId(expr); cachedId >= 0)
++    return cachedId;
++
++  const auto *functionDecl = llvm::dyn_cast<FunctionDecl>(expr->getDecl());
++  if (!functionDecl)
++    return -1;
++
++  const int exprId = processBaseExpr(const_cast<DeclRefExpr *>(expr),
++                                     ExprKind::ROUTINEEXPR);
++  const KeyType functionKey =
++      KeyGen::Function::makeKey(functionDecl, ast_context_);
++  if (auto functionId = SEARCH_FUNCTION_CACHE(functionKey)) {
++    DbModel::FunBind bindModel = {exprId, *functionId};
++    STG.insertClassObj(bindModel);
++  } else {
++    DbModel::FunBind bindModel = {exprId, -1};
++    STG.insertClassObj(bindModel);
++    PendingUpdate update{
++        functionKey, CacheType::FUNCTION, [exprId](int resolvedId) {
++          DbModel::FunBind resolvedModel = {exprId, resolvedId};
++          STG.insertClassObj(resolvedModel);
++        }};
++    DependencyManager::instance().addDependency(update);
++  }
++  return exprId;
++}
++
++int ExprProcessor::processThisExpr(const CXXThisExpr *expr) {
++  if (!expr)
++    return -1;
++  return processBaseExpr(const_cast<CXXThisExpr *>(expr),
++                         ExprKind::THISACCESS);
++}
++
++int ExprProcessor::getOrProcessConversionSourceId(const Expr *expr) {
++  if (!expr)
++    return -1;
++
++  if (const int exprId = getOrProcessExprId(expr); exprId >= 0)
++    return exprId;
++
++  if (const auto *memberExpr = llvm::dyn_cast<MemberExpr>(expr)) {
++    processMemberExpr(memberExpr);
++    return findCachedExprId(memberExpr);
++  }
++
++  if (const auto *declRef = llvm::dyn_cast<DeclRefExpr>(expr))
++    return processFunctionReference(declRef);
++
++  return -1;
++}
++
+ void ExprProcessor::recordExprType(const Expr *expr, int exprId) {
+   if (!expr || exprId < 0 || !type_processor_)
+     return;
+@@ -749,6 +812,7 @@ int ExprProcessor::classifyConversionKind(const CastExpr *castExpr) const {
+
+   switch (castExpr->getCastKind()) {
+   case CK_DerivedToBase:
++  case CK_UncheckedDerivedToBase:
+     return 2;
+   case CK_BaseToDerived:
+     return 3;
+@@ -786,14 +850,8 @@ int ExprProcessor::processCastExpr(const CastExpr *castExpr) {
+     return cachedId;
+
+   processCastTypes(castExpr);
+-  int convertedId = getOrProcessExprId(castExpr->getSubExpr());
+-  if (convertedId < 0) {
+-    if (const auto *memberExpr =
+-            llvm::dyn_cast<MemberExpr>(castExpr->getSubExpr())) {
+-      processMemberExpr(memberExpr);
+-      convertedId = findCachedExprId(memberExpr);
+-    }
+-  }
++  const int convertedId =
++      getOrProcessConversionSourceId(castExpr->getSubExpr());
+   if (convertedId < 0)
+     return -1;
+
+@@ -805,9 +863,9 @@ int ExprProcessor::processCastExpr(const CastExpr *castExpr) {
+     if (loadExprId < 0)
+       return -1;
+     INSERT_EXPR_CACHE(KeyGen::Expr_::makeKey(castExpr, ast_context_),
+-                      loadExprId);
++                      convertedId);
+     recordExprIsLoad(loadExprId);
+-    return loadExprId;
++    return convertedId;
+   }
+
+   ExprKind exprKind = classifyCastExprKind(castExpr);
+diff --git a/src/util/key_generator/expr.cc b/src/util/key_generator/expr.cc
+index c405541..bc87181 100644
+--- a/src/util/key_generator/expr.cc
++++ b/src/util/key_generator/expr.cc
+@@ -165,6 +165,12 @@ KeyType makeKey(const Expr *expr, ASTContext *ctx) {
+     if (declRefExpr->getDecl()) {
+       locStr += "-decl-" + std::to_string(declRefExpr->getDecl()->getID());
+     }
++  } else if (llvm::isa<CXXThisExpr>(expr)) {
++    // `this` and its enclosing MemberExpr commonly share the same source
++    // location. CXXThisExpr was not previously materialized; give the new P11
++    // conversion-source identity a stable suffix without changing existing
++    // expression keys.
++    locStr += "-this";
+   } else if (auto binaryOp = llvm::dyn_cast<BinaryOperator>(expr)) {
+     locStr += "-opcode-" + std::to_string(binaryOp->getOpcode());
+   } else if (auto unaryOp = llvm::dyn_cast<UnaryOperator>(expr)) {
+diff --git a/tests/unit-tests/p11/casts_conversion_case.cc b/tests/unit-tests/p11/casts_conversion_case.cc
+index a340d90..401bfae 100644
+--- a/tests/unit-tests/p11/casts_conversion_case.cc
++++ b/tests/unit-tests/p11/casts_conversion_case.cc
+@@ -3,14 +3,25 @@ struct Base {
+   int member;
+ };
+
+-struct Derived : Base {};
++struct Derived : Base {
++  int inherited_member() { return member; }
++};
+ struct Other {};
+
++int decay_target(int value) { return value; }
++using FunctionPointer = int (*)(int);
++
+ double implicit_numeric(int value) { return value; }
+ bool implicit_bool(int *pointer) { return pointer; }
++int *implicit_null_pointer() { return nullptr; }
+ Base *implicit_upcast(Derived *pointer) { return pointer; }
+ int array_decay(int (&values)[3]) { return *values; }
+ int parenthesized_load(int value) { return (value); }
++FunctionPointer function_decay() { return decay_target; }
++
++double paren_load_chain(int value) {
++  return static_cast<double>((value));
++}
+
+ double nested_conversions(short value) {
+   return static_cast<double>((int(value)));

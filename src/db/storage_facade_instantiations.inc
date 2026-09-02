@@ -21,6 +21,7 @@ template void StorageFacade::insertClassObj<DbModel::BuiltinType_&>(DbModel::Bui
 template void StorageFacade::insertClassObj<DbModel::ClassInstantiation&>(DbModel::ClassInstantiation&);
 template void StorageFacade::insertClassObj<DbModel::ClassTemplateArgument&>(DbModel::ClassTemplateArgument&);
 template void StorageFacade::insertClassObj<DbModel::ClassTemplateArgumentValue&>(DbModel::ClassTemplateArgumentValue&);
+template void StorageFacade::insertClassObj<DbModel::CompGenerated&>(DbModel::CompGenerated&);
 template void StorageFacade::insertClassObj<DbModel::Compilation&>(DbModel::Compilation&);
 template void StorageFacade::insertClassObj<DbModel::CompilationArg&>(DbModel::CompilationArg&);
 template void StorageFacade::insertClassObj<DbModel::CompilationBuildMode&>(DbModel::CompilationBuildMode&);
@@ -36,6 +37,7 @@ template void StorageFacade::insertClassObj<DbModel::ConstexprIfElse&>(DbModel::
 template void StorageFacade::insertClassObj<DbModel::ConstexprIfInit&>(DbModel::ConstexprIfInit&);
 template void StorageFacade::insertClassObj<DbModel::ConstexprIfThen&>(DbModel::ConstexprIfThen&);
 template void StorageFacade::insertClassObj<DbModel::Container&>(DbModel::Container&);
+template void StorageFacade::insertClassObj<DbModel::ConversionKind&>(DbModel::ConversionKind&);
 template void StorageFacade::insertClassObj<DbModel::Coroutine&>(DbModel::Coroutine&);
 template void StorageFacade::insertClassObj<DbModel::CoroutineDelete&>(DbModel::CoroutineDelete&);
 template void StorageFacade::insertClassObj<DbModel::CoroutineNew&>(DbModel::CoroutineNew&);
@@ -49,7 +51,10 @@ template void StorageFacade::insertClassObj<DbModel::DirectBaseOffset&>(DbModel:
 template void StorageFacade::insertClassObj<DbModel::DoBody&>(DbModel::DoBody&);
 template void StorageFacade::insertClassObj<DbModel::EnumConstant&>(DbModel::EnumConstant&);
 template void StorageFacade::insertClassObj<DbModel::Expr&>(DbModel::Expr&);
+template void StorageFacade::insertClassObj<DbModel::ExprConv&>(DbModel::ExprConv&);
+template void StorageFacade::insertClassObj<DbModel::ExprIsLoad&>(DbModel::ExprIsLoad&);
 template void StorageFacade::insertClassObj<DbModel::ExprParent&>(DbModel::ExprParent&);
+template void StorageFacade::insertClassObj<DbModel::ExprType&>(DbModel::ExprType&);
 template void StorageFacade::insertClassObj<DbModel::FieldOffset&>(DbModel::FieldOffset&);
 template void StorageFacade::insertClassObj<DbModel::File&>(DbModel::File&);
 template void StorageFacade::insertClassObj<DbModel::Folder&>(DbModel::Folder&);

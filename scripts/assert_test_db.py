@@ -912,6 +912,228 @@ def check_p10(audit: Audit) -> None:
     )
 
 
+def check_p11(audit: Audit) -> None:
+    expected_counts = {
+        "exprs": 56,
+        "exprconv": 30,
+        "expr_types": 56,
+        "expr_isload": 18,
+        "compgenerated": 14,
+        "conversionkinds": 26,
+    }
+    for table, expected in expected_counts.items():
+        check_count(audit, table, expected)
+
+    for table, columns in (
+        ("exprconv", ["converted", "conversion"]),
+        ("expr_types", ["id", "typeid", "value_category"]),
+        ("expr_isload", ["expr_id"]),
+        ("compgenerated", ["id"]),
+        ("conversionkinds", ["expr_id", "kind"]),
+    ):
+        audit.check_columns(table, columns)
+
+    audit.check(
+        "every expression has one type/category row",
+        """
+        select count(*) from (
+          select expression.id
+          from exprs expression
+          left join expr_types typed on typed.id=expression.id
+          group by expression.id having count(typed.id)<>1
+        )
+        """,
+        0,
+    )
+    audit.check(
+        "all value categories covered",
+        """
+        select count(*) from (
+          select value_category from expr_types
+          group by value_category having value_category in (1,2,3)
+        )
+        """,
+        3,
+    )
+    audit.check(
+        "invalid value categories",
+        "select count(*) from expr_types where value_category not in (1,2,3)",
+        0,
+    )
+    audit.check(
+        "conversion endpoint orphans",
+        """
+        select count(*) from exprconv relation
+        left join exprs converted on converted.id=relation.converted
+        left join exprs conversion on conversion.id=relation.conversion
+        where converted.id is null or conversion.id is null
+        """,
+        0,
+    )
+    audit.check(
+        "every wrapper has one incoming conversion edge",
+        """
+        select count(*) from (
+          select expression.id
+          from exprs expression
+          left join exprconv relation on relation.conversion=expression.id
+          where expression.kind in (8,12,210,211,212,213,214)
+          group by expression.id having count(relation.converted)<>1
+        )
+        """,
+        0,
+    )
+    audit.check(
+        "nested conversion chain",
+        """
+        select count(*) > 0 from exprconv outer_edge
+        join exprconv inner_edge on inner_edge.conversion=outer_edge.converted
+        """,
+        1,
+    )
+    audit.check(
+        "paren load conversion chain order",
+        """
+        select count(*) from exprconv paren_edge
+        join exprs source
+          on source.id=paren_edge.converted and source.kind=84
+        join exprs paren
+          on paren.id=paren_edge.conversion and paren.kind=12
+        join exprconv implicit_edge on implicit_edge.converted=paren.id
+        join exprs implicit_cast
+          on implicit_cast.id=implicit_edge.conversion
+         and implicit_cast.kind=214
+        join exprconv explicit_edge
+          on explicit_edge.converted=implicit_cast.id
+        join exprs explicit_cast
+          on explicit_cast.id=explicit_edge.conversion
+         and explicit_cast.kind=210
+        """,
+        1,
+    )
+    audit.check(
+        "function-to-pointer decay source",
+        """
+        select count(*) from exprconv relation
+        join exprs source on source.id=relation.converted and source.kind=97
+        join exprs conversion
+          on conversion.id=relation.conversion and conversion.kind=214
+        join compgenerated generated on generated.id=conversion.id
+        """,
+        1,
+    )
+    audit.check(
+        "nullptr implicit conversion source",
+        """
+        select count(*) from exprconv relation
+        join exprs source on source.id=relation.converted and source.kind=123
+        join exprs conversion
+          on conversion.id=relation.conversion and conversion.kind=214
+        join conversionkinds kind
+          on kind.expr_id=conversion.id and kind.kind=0
+        join compgenerated generated on generated.id=conversion.id
+        """,
+        1,
+    )
+    audit.check(
+        "unchecked derived-to-base conversion kind",
+        """
+        select count(*) from exprconv relation
+        join exprs source on source.id=relation.converted and source.kind=85
+        join conversionkinds kind
+          on kind.expr_id=relation.conversion and kind.kind=2
+        join compgenerated generated on generated.id=relation.conversion
+        """,
+        1,
+    )
+    audit.check(
+        "load markers resolve to non-wrapper expressions",
+        """
+        select count(*) from expr_isload load
+        left join exprs expression on expression.id=load.expr_id
+        where expression.id is null
+           or expression.kind in (8,12,210,211,212,213,214,217)
+        """,
+        0,
+    )
+    audit.check(
+        "implicit generated kind distribution",
+        """
+        select count(*) from (
+          select expression.kind, count(*) n
+          from compgenerated generated
+          join exprs expression on expression.id=generated.id
+          group by expression.kind
+          having (expression.kind=8 and n=1)
+              or (expression.kind=214 and n=13)
+        )
+        """,
+        2,
+    )
+    audit.check(
+        "explicit cast syntax distribution",
+        """
+        select count(*) from (
+          select expression.kind, count(*) n
+          from exprs expression
+          left join compgenerated generated on generated.id=expression.id
+          where expression.kind between 210 and 214 and generated.id is null
+          group by expression.kind
+          having (expression.kind=210 and n=6)
+              or (expression.kind=211 and n=2)
+              or (expression.kind=212 and n=1)
+              or (expression.kind=213 and n=1)
+              or (expression.kind=214 and n=3)
+        )
+        """,
+        5,
+    )
+    audit.check(
+        "every cast has exactly one conversion kind",
+        """
+        select count(*) from (
+          select expression.id
+          from exprs expression
+          left join conversionkinds kind on kind.expr_id=expression.id
+          where expression.kind between 210 and 214
+          group by expression.id having count(kind.kind)<>1
+        )
+        """,
+        0,
+    )
+    audit.check(
+        "conversion kind category coverage",
+        """
+        select count(*) from (
+          select kind from conversionkinds
+          group by kind having kind in (0,1,2,3,4,5,6)
+        )
+        """,
+        7,
+    )
+    audit.check(
+        "paren and array conversion-kind exclusion",
+        """
+        select count(*) from conversionkinds kind
+        join exprs expression on expression.id=kind.expr_id
+        where expression.kind in (8,12)
+        """,
+        0,
+    )
+    audit.check("legacy implicit cast kind absent", "select count(*) from exprs where kind=217", 0)
+    audit.check(
+        "conversion nodes excluded from exprparents",
+        """
+        select count(*) from exprparents relation
+        join exprs child on child.id=relation.expr_id
+        left join exprs parent on parent.id=relation.parent_id
+        where child.kind in (8,12,210,211,212,213,214,217)
+           or parent.kind in (8,12,210,211,212,213,214,217)
+        """,
+        0,
+    )
+
+
 def run(case: str, database: Path) -> int:
     audit = Audit(case, database)
     try:
@@ -930,6 +1152,8 @@ def run(case: str, database: Path) -> int:
             check_p9(audit)
         elif case == "unit-tests/p10/expression_graph_case":
             check_p10(audit)
+        elif case == "unit-tests/p11/casts_conversion_case":
+            check_p11(audit)
         else:
             audit.warn_if_positive(
                 "known non-P8 initialiser expression placeholders",

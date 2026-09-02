@@ -131,6 +131,29 @@ KeyType makeKey(const Expr *expr, ASTContext *ctx) {
                            .concat(std::to_string(endCol))
                            .str();
 
+  // P11: only conversion wrappers extend the established source-location
+  // identity. Clang commonly emits several wrappers with the same range, and
+  // collapsing them would lose conversion-chain levels.
+  if (const auto *castExpr = llvm::dyn_cast<CastExpr>(expr)) {
+    const Expr *source = castExpr->getSubExpr();
+    locStr += "-conversion-class-";
+    locStr += castExpr->getStmtClassName();
+    locStr += "-castkind-" + std::to_string(castExpr->getCastKind());
+    locStr += "-source-type-" + source->getType().getAsString();
+    locStr += "-target-type-" + castExpr->getType().getAsString();
+    locStr += "-source-vk-" + std::to_string(source->getValueKind());
+    locStr += "-target-vk-" + std::to_string(castExpr->getValueKind());
+  } else if (const auto *parenExpr = llvm::dyn_cast<ParenExpr>(expr)) {
+    const Expr *source = parenExpr->getSubExpr();
+    locStr += "-conversion-class-";
+    locStr += parenExpr->getStmtClassName();
+    locStr += "-castkind-paren";
+    locStr += "-source-type-" + source->getType().getAsString();
+    locStr += "-target-type-" + parenExpr->getType().getAsString();
+    locStr += "-source-vk-" + std::to_string(source->getValueKind());
+    locStr += "-target-vk-" + std::to_string(parenExpr->getValueKind());
+  }
+
   // Add expression-specific information to enhance uniqueness
   if (auto callExpr = llvm::dyn_cast<CallExpr>(expr)) {
     locStr += "-args-" + std::to_string(callExpr->getNumArgs());
@@ -142,6 +165,12 @@ KeyType makeKey(const Expr *expr, ASTContext *ctx) {
     if (declRefExpr->getDecl()) {
       locStr += "-decl-" + std::to_string(declRefExpr->getDecl()->getID());
     }
+  } else if (llvm::isa<CXXThisExpr>(expr)) {
+    // `this` and its enclosing MemberExpr commonly share the same source
+    // location. CXXThisExpr was not previously materialized; give the new P11
+    // conversion-source identity a stable suffix without changing existing
+    // expression keys.
+    locStr += "-this";
   } else if (auto binaryOp = llvm::dyn_cast<BinaryOperator>(expr)) {
     locStr += "-opcode-" + std::to_string(binaryOp->getOpcode());
   } else if (auto unaryOp = llvm::dyn_cast<UnaryOperator>(expr)) {
