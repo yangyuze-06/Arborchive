@@ -59,6 +59,37 @@ inline auto conversionkinds() {
       make_column("kind", &DbModel::ConversionKind::kind));
 }
 
+inline auto expr_allocator() {
+  return make_table(
+      "expr_allocator",
+      make_column("expr", &DbModel::ExprAllocator::expr, primary_key()),
+      make_column("func", &DbModel::ExprAllocator::func),
+      make_column("form", &DbModel::ExprAllocator::form));
+}
+
+inline auto expr_deallocator() {
+  return make_table(
+      "expr_deallocator",
+      make_column("expr", &DbModel::ExprDeallocator::expr, primary_key()),
+      make_column("func", &DbModel::ExprDeallocator::func),
+      make_column("form", &DbModel::ExprDeallocator::form));
+}
+
+inline auto new_allocated_type() {
+  return make_table(
+      "new_allocated_type",
+      make_column("expr", &DbModel::NewAllocatedType::expr, primary_key()),
+      make_column("type_id", &DbModel::NewAllocatedType::type_id));
+}
+
+inline auto new_array_allocated_type() {
+  return make_table(
+      "new_array_allocated_type",
+      make_column("expr", &DbModel::NewArrayAllocatedType::expr,
+                  primary_key()),
+      make_column("type_id", &DbModel::NewArrayAllocatedType::type_id));
+}
+
 inline auto funbind() {
   return make_table(
       "funbind",

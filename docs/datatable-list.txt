@@ -162,8 +162,8 @@ DONE   156. iscall
   159. namequalifiers
 DONE   160. varbind
 DONE   161. funbind
-  162. expr_allocator
-  163. expr_deallocator
+DONE   162. expr_allocator
+DONE   163. expr_deallocator
   164. expr_cond_two_operand
   165. expr_cond_guard
   166. expr_cond_true
@@ -180,8 +180,8 @@ DONE   176. exprs
   177. expr_reuse
 DONE   178. expr_types
   179. compound_requirement_is_noexcept
-  180. new_allocated_type
-  181. new_array_allocated_type
+DONE   180. new_allocated_type
+DONE   181. new_array_allocated_type
 DONE   182. aggregate_field_init
 DONE   183. aggregate_array_init
   184. condition_decl_bind
