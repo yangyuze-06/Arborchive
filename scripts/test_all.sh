@@ -38,6 +38,7 @@ CASES=(
   "unit-tests/p9/constexpr_flow_case"
   "unit-tests/p10/expression_graph_case"
   "unit-tests/p11/casts_conversion_case"
+  "unit-tests/p12/allocation_lifetime_case"
 )
 
 if [[ -z "${LLVM_CONFIG:-}" ]]; then
