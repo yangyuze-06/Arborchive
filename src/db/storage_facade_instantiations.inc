@@ -51,7 +51,9 @@ template void StorageFacade::insertClassObj<DbModel::DirectBaseOffset&>(DbModel:
 template void StorageFacade::insertClassObj<DbModel::DoBody&>(DbModel::DoBody&);
 template void StorageFacade::insertClassObj<DbModel::EnumConstant&>(DbModel::EnumConstant&);
 template void StorageFacade::insertClassObj<DbModel::Expr&>(DbModel::Expr&);
+template void StorageFacade::insertClassObj<DbModel::ExprAllocator&>(DbModel::ExprAllocator&);
 template void StorageFacade::insertClassObj<DbModel::ExprConv&>(DbModel::ExprConv&);
+template void StorageFacade::insertClassObj<DbModel::ExprDeallocator&>(DbModel::ExprDeallocator&);
 template void StorageFacade::insertClassObj<DbModel::ExprIsLoad&>(DbModel::ExprIsLoad&);
 template void StorageFacade::insertClassObj<DbModel::ExprParent&>(DbModel::ExprParent&);
 template void StorageFacade::insertClassObj<DbModel::ExprType&>(DbModel::ExprType&);
@@ -117,6 +119,8 @@ template void StorageFacade::insertClassObj<DbModel::Namespace&>(DbModel::Namesp
 template void StorageFacade::insertClassObj<DbModel::NamespaceDecl&>(DbModel::NamespaceDecl&);
 template void StorageFacade::insertClassObj<DbModel::NamespaceInline&>(DbModel::NamespaceInline&);
 template void StorageFacade::insertClassObj<DbModel::NamespaceMember&>(DbModel::NamespaceMember&);
+template void StorageFacade::insertClassObj<DbModel::NewAllocatedType&>(DbModel::NewAllocatedType&);
+template void StorageFacade::insertClassObj<DbModel::NewArrayAllocatedType&>(DbModel::NewArrayAllocatedType&);
 template void StorageFacade::insertClassObj<DbModel::NonTypeTemplateParameter&>(DbModel::NonTypeTemplateParameter&);
 template void StorageFacade::insertClassObj<DbModel::Parameter&>(DbModel::Parameter&);
 template void StorageFacade::insertClassObj<DbModel::ParameterizedElement&>(DbModel::ParameterizedElement&);

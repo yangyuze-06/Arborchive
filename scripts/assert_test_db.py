@@ -1134,6 +1134,209 @@ def check_p11(audit: Audit) -> None:
     )
 
 
+def check_p12(audit: Audit) -> None:
+    expected_counts = {
+        "expr_allocator": 8,
+        "expr_deallocator": 17,
+        "new_allocated_type": 5,
+        "new_array_allocated_type": 3,
+    }
+    for table, expected in expected_counts.items():
+        check_count(audit, table, expected)
+
+    for table, columns in (
+        ("expr_allocator", ["expr", "func", "form"]),
+        ("expr_deallocator", ["expr", "func", "form"]),
+        ("new_allocated_type", ["expr", "type_id"]),
+        ("new_array_allocated_type", ["expr", "type_id"]),
+    ):
+        audit.check_columns(table, columns)
+
+    audit.check(
+        "new/delete kind distribution",
+        """
+        select count(*) from (
+          select kind, count(*) n from exprs
+          where kind in (87,88,128,129) group by kind
+          having (kind=87 and n=5)
+              or (kind=88 and n=8)
+              or (kind=128 and n=2)
+              or (kind=129 and n=3)
+        )
+        """,
+        4,
+    )
+    audit.check(
+        "allocator form distribution",
+        """
+        select count(*) from (
+          select form, count(*) n from expr_allocator group by form
+          having (form=0 and n=7) or (form=1 and n=1)
+        )
+        """,
+        2,
+    )
+    audit.check(
+        "deallocator form coverage",
+        """
+        select count(*) from (
+          select form from expr_deallocator group by form
+          having form in (0,1,2,3,4)
+        )
+        """,
+        5,
+    )
+    audit.check(
+        "allocator/deallocator function reference orphans",
+        """
+        select count(*) from (
+          select func from expr_allocator
+          union all
+          select func from expr_deallocator
+        ) relation
+        left join functions function on function.id=relation.func
+        where relation.func < 0 or function.id is null
+        """,
+        0,
+    )
+    audit.check(
+        "allocation expression reference orphans",
+        """
+        select count(*) from (
+          select expr from expr_allocator
+          union all select expr from expr_deallocator
+          union all select expr from new_allocated_type
+          union all select expr from new_array_allocated_type
+        ) relation
+        left join exprs expression on expression.id=relation.expr
+        where expression.id is null
+        """,
+        0,
+    )
+    audit.check(
+        "allocated type reference orphans",
+        """
+        with all_types(id) as (
+          select id from builtintypes
+          union select id from derivedtypes
+          union select id from usertypes
+          union select id from routinetypes
+        ), allocated(type_id) as (
+          select type_id from new_allocated_type
+          union all select type_id from new_array_allocated_type
+        )
+        select count(*) from allocated
+        left join all_types on all_types.id=allocated.type_id
+        where allocated.type_id < 0 or all_types.id is null
+        """,
+        0,
+    )
+    audit.check(
+        "array allocated outer type shapes",
+        """
+        select count(*) from new_array_allocated_type allocated
+        join derivedtypes type on type.id=allocated.type_id and type.kind=4
+        where type.name in ('int[3]','int[]','int[][4]')
+        """,
+        3,
+    )
+    audit.check(
+        "nested fixed array base resolved",
+        """
+        select count(*) from new_array_allocated_type allocated
+        join derivedtypes outer_type on outer_type.id=allocated.type_id
+        join derivedtypes inner_type on inner_type.id=outer_type.type_id
+        where outer_type.name='int[][4]' and inner_type.name='int[4]'
+        """,
+        1,
+    )
+    audit.check(
+        "array allocated element references resolved",
+        """
+        select count(*) from new_array_allocated_type allocated
+        join derivedtypes outer_type on outer_type.id=allocated.type_id
+        where outer_type.type_id < 0
+        """,
+        0,
+    )
+    audit.check(
+        "initializer child one edges",
+        """
+        select count(*) from exprparents relation
+        join exprs parent on parent.id=relation.parent_id
+        where parent.kind in (87,129) and relation.child_index=1
+        """,
+        2,
+    )
+    audit.check(
+        "dynamic extent child two edges",
+        """
+        select count(*) from exprparents relation
+        join exprs parent on parent.id=relation.parent_id
+        where parent.kind=129 and relation.child_index=2
+        """,
+        2,
+    )
+    audit.check(
+        "trivial delete child three edges",
+        """
+        select count(*) from exprparents relation
+        join exprs parent on parent.id=relation.parent_id
+        where parent.kind in (88,128) and relation.child_index=3
+        """,
+        5,
+    )
+    audit.check(
+        "nontrivial delete child three guard",
+        """
+        select count(*) from exprparents relation
+        join exprs parent on parent.id=relation.parent_id
+        join locations_expr location on location.id=parent.location
+        where location.start_line in (76,77,82,83,84)
+          and relation.child_index=3
+        """,
+        0,
+    )
+    audit.check(
+        "virtual destructor static deallocator guard",
+        """
+        select count(*) from expr_deallocator relation
+        join exprs expression on expression.id=relation.expr
+        join locations_expr location on location.id=expression.location
+        where location.start_line=77
+        """,
+        0,
+    )
+    audit.check(
+        "statically selected virtual-type deallocators",
+        """
+        select count(*) from expr_deallocator relation
+        join exprs expression on expression.id=relation.expr
+        join locations_expr location on location.id=expression.location
+        where location.start_line in (82,83,84)
+        """,
+        3,
+    )
+    audit.check(
+        "dependent allocation expressions deferred",
+        """
+        select count(*) from exprs expression
+        join locations_expr location on location.id=expression.location
+        where expression.kind in (87,88,128,129)
+          and location.start_line in (49,54)
+        """,
+        0,
+    )
+    audit.check(
+        "deferred lifetime tables absent",
+        """
+        select count(*) from pragma_table_list
+        where name in ('synthetic_destructor_call','expr_reuse')
+        """,
+        0,
+    )
+
+
 def run(case: str, database: Path) -> int:
     audit = Audit(case, database)
     try:
@@ -1154,6 +1357,8 @@ def run(case: str, database: Path) -> int:
             check_p10(audit)
         elif case == "unit-tests/p11/casts_conversion_case":
             check_p11(audit)
+        elif case == "unit-tests/p12/allocation_lifetime_case":
+            check_p12(audit)
         else:
             audit.warn_if_positive(
                 "known non-P8 initialiser expression placeholders",

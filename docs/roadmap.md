@@ -243,6 +243,24 @@ P7 先抽取 attribute presence graph，再处理 argument system。presence 与
 
 - Focus: `expr_allocator`、new/delete semantics、allocation relationships
 - Complexity: Medium
+- Status: DONE
+- Scope: `CXXNewExpr`/`CXXDeleteExpr` 分别写入 kind 87/129 与 88/128，
+  并新增 CodeQL 对齐的 `new_allocated_type`、
+  `new_array_allocated_type`、`expr_allocator`、`expr_deallocator`。
+- Architecture: allocation semantics 与主图安全子集由 `ExprProcessor`
+  持有；`FunctionProcessor::resolveFunctionReference()` 只提供窄化、按需的
+  稳定函数 ID 解析；`ASTVisitor` 仅注入依赖并派发 new/delete AST 节点。
+- Graph: initializer、动态外层 extent、trivially destructible delete
+  operand 分别使用 child 1、2、3；不合成 allocator/deallocator/destructor
+  call expression。
+- Lifetime closure: `synthetic_destructor_call`、`expr_reuse` 与 delete 合成
+  call 子节点继续 deferred；重新进入条件记录于
+  `.trellis/tasks/p12-allocation-lifetime/research.md`。
+- Validation: `tests/unit-tests/p12/allocation_lifetime_case.cc` 覆盖普通/数组、
+  常量/动态/嵌套数组、placement、over-aligned、类级 operator、
+  sized/aligned/destroying delete 与虚析构 guard，并由 SQLite 断言检查
+  schema、kind、类型、form、引用完整性及主图边。
+- Migration: 新增四张表并开始输出四种 new/delete kind；旧数据库必须重建。
 
 ### P13: Metadata & Misc Cleanup
 

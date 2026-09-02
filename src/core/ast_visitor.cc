@@ -67,7 +67,8 @@ void ASTVisitor::initProcessors() {
   type_processor_ = std::make_unique<TypeProcessor>(context_, pp_);
   specifier_processor_ = std::make_unique<SpecifierProcessor>(context_, pp_);
   expr_processor_ = std::make_unique<ExprProcessor>(
-      context_, pp_, type_processor_.get(), specifier_processor_.get());
+      context_, pp_, type_processor_.get(), specifier_processor_.get(),
+      function_processor_.get());
   stmt_processor_ =
       std::make_unique<StmtProcessor>(context_, pp_, expr_processor_.get());
   attribute_processor_ =
@@ -451,6 +452,16 @@ bool ASTVisitor::VisitDeclRefExpr(clang::DeclRefExpr *expr) {
 
 bool ASTVisitor::VisitCallExpr(CallExpr *expr) {
   expr_processor_->processCallExpr(expr);
+  return true;
+}
+
+bool ASTVisitor::VisitCXXNewExpr(const CXXNewExpr *expr) {
+  expr_processor_->processCXXNewExpr(expr);
+  return true;
+}
+
+bool ASTVisitor::VisitCXXDeleteExpr(const CXXDeleteExpr *expr) {
+  expr_processor_->processCXXDeleteExpr(expr);
   return true;
 }
 

@@ -1,0 +1,919 @@
+diff --git a/.trellis/tasks/p12-allocation-lifetime/plan.md b/.trellis/tasks/p12-allocation-lifetime/plan.md
+new file mode 100644
+index 0000000..1fb8dd4
+--- /dev/null
++++ b/.trellis/tasks/p12-allocation-lifetime/plan.md
+@@ -0,0 +1,61 @@
++# P12 Allocation & Lifetime Plan
++
++## Goal
++
++Implement the CodeQL-aligned allocation expression and allocator/deallocator
++facts for P12 without adding synthetic call expressions or moving semantic
++coordination into `ASTVisitor`.
++
++## Scope
++
++- `CXXNewExpr` kinds 87/129 and `CXXDeleteExpr` kinds 88/128.
++- `new_allocated_type`, `new_array_allocated_type`, `expr_allocator`, and
++  `expr_deallocator`.
++- Stable function ID resolution through a narrow `FunctionProcessor` API.
++- Main-tree edges for initializer (1), non-constant extent (2), and the
++  trivially-destructible delete operand (3).
++- One isolated C++20 fixture and SQLite assertions.
++
++## Non-goals
++
++- `synthetic_destructor_call`.
++- `expr_reuse`.
++- Synthetic destructor, allocator, or deallocator call expression nodes.
++- Any P13 metadata work.
++
++## Allowed paths
++
++- `include/core/processor/`, `src/core/processor/`
++- `include/model/db/`, `include/db/table_defs/`, `include/db/table_init.h`
++- `include/core/ast_visitor.h`, `src/core/ast_visitor.cc`
++- `src/db/storage_facade_instantiations.inc`
++- `tests/unit-tests/p12/`, `scripts/test_all.sh`, `scripts/assert_test_db.py`
++- `.trellis/tasks/p12-allocation-lifetime/`, `docs/roadmap.md`
++
++## Forbidden paths
++
++- Unrelated processor and schema subsystems.
++- Tables absent from `docs/datatable-list.txt`.
++- Semantic/cache/dependency/database orchestration inside `Visit*` methods.
++
++## Required specs
++
++- `AGENTS.md`, `docs/agent_workflow.md`, `.trellis/workflow.md`
++- `.trellis/spec/arborchive/{architecture,ast-visitor-boundary,processor-boundary,schema-codeql-alignment,testing-and-verification}.md`
++- `docs/datatable-list.txt`, `docs/semmlecode.cpp.dbscheme`, P12 roadmap.
++
++## Validation
++
++1. Baseline `scripts/test_all.sh`.
++2. `python3 scripts/generate_instantiations.py`.
++3. `make debug -j 8`.
++4. Targeted P12 extraction and `scripts/assert_test_db.py`.
++5. `scripts/test_all.sh`.
++6. SQLite schema, row, reference, kind, form, graph, and virtual-guard checks.
++
++## Risks
++
++- Clang overload selection differs by ABI/standard-library declaration set.
++- A virtual destructor makes the delete target runtime-dependent.
++- Array-new `getAllocatedType()` excludes only the outer runtime/constant
++  extent, so outer array reconstruction must preserve nested array dimensions.
+diff --git a/.trellis/tasks/p12-allocation-lifetime/research.md b/.trellis/tasks/p12-allocation-lifetime/research.md
+new file mode 100644
+index 0000000..cedc086
+--- /dev/null
++++ b/.trellis/tasks/p12-allocation-lifetime/research.md
+@@ -0,0 +1,56 @@
++# P12 Allocation & Lifetime Research
++
++## Ownership and alignment
++
++`ExprProcessor` owns allocation semantics, relationship rows, and main
++expression graph edges. `FunctionProcessor` exposes only a stable function
++reference resolver. `ASTVisitor` injects that dependency and dispatches
++`CXXNewExpr`/`CXXDeleteExpr` directly.
++
++All four tables are CodeQL-aligned and already approved in
++`docs/datatable-list.txt`: `expr_allocator` (162), `expr_deallocator` (163),
++`new_allocated_type` (180), and `new_array_allocated_type` (181). Their columns
++match `docs/semmlecode.cpp.dbscheme`.
++
++## Type rule
++
++- Plain new persists `CXXNewExpr::getAllocatedType()`.
++- Array new wraps that type in exactly one outer constant array when the outer
++  extent is an integer constant; otherwise it uses an incomplete array.
++- Because the allocated type is retained as the element type of the new outer
++  array, fixed nested dimensions such as `new int[n][4]` remain intact.
++
++## Function forms
++
++- Allocator form is 1 when Clang says alignment is implicitly passed or the
++  selected function contains an `std::align_val_t` parameter; otherwise 0.
++- Deallocator form is a bitset: canonical `size_t` = 1,
++  `std::align_val_t` = 2, destroying operator delete = 4.
++- A relation is emitted only after the function declaration resolves to a
++  non-negative persisted function ID.
++- Scalar delete expressions with a virtual destroyed-type destructor omit the
++  relation only when runtime final-overrider selection can change the target.
++  Explicit global delete, array delete, and final record/destructor cases retain
++  Clang's statically selected deallocator.
++- Type/value/instantiation-dependent new/delete expressions are deferred before
++  expression or allocated-type materialization.
++
++## Lifetime feasibility closure
++
++This phase deliberately does not implement `synthetic_destructor_call`,
++`expr_reuse`, or synthetic destructor/deallocator call children for delete.
++`CXXDeleteExpr` does not directly expose a persistable destructor-call `Expr`,
++while current expression identity depends on stable source ranges. Synthesizing
++such nodes would break identity and main-graph semantics.
++
++### Re-entry condition
++
++Re-enter lifetime call materialization only after the project establishes both:
++
++1. a specification for compiler-generated expression identity; and
++2. a specification for routine-call materialization.
++
++## Migration
++
++P12 adds four schema tables and begins emitting expression kinds 87, 88, 128,
++and 129. Existing databases must be rebuilt.
+diff --git a/.trellis/tasks/p12-allocation-lifetime/summary.md b/.trellis/tasks/p12-allocation-lifetime/summary.md
+new file mode 100644
+index 0000000..e15d275
+--- /dev/null
++++ b/.trellis/tasks/p12-allocation-lifetime/summary.md
+@@ -0,0 +1,49 @@
++# P12 Allocation & Lifetime Summary
++
++## Implemented
++
++- Added CodeQL-aligned allocation tables: `expr_allocator`,
++  `expr_deallocator`, `new_allocated_type`, and
++  `new_array_allocated_type`.
++- Added new/delete expression kinds 87/129 and 88/128 in `ExprProcessor`.
++- Reconstructed array-new allocated types with a constant or incomplete outer
++  extent while preserving nested fixed arrays.
++- Added allocator/deallocator form classification and a narrow
++  `FunctionProcessor::resolveFunctionReference()` materialization API.
++- Added safe main-tree edges for initializer (1), dynamic extent (2), and
++  trivially-destructible delete operand (3).
++- Guarded only runtime-selected virtual-destructor deletes from misleading
++  static deallocator rows; global, array, and final cases retain static facts.
++- Deferred dependent new/delete patterns before P12 expression and allocated
++  type materialization.
++- Kept synthetic lifetime call nodes and `expr_reuse` deferred.
++
++## CodeQL/schema review
++
++- Category: CodeQL-aligned tables already listed in
++  `docs/datatable-list.txt` and defined by `docs/semmlecode.cpp.dbscheme`.
++- Arbor-specific extension: none.
++- Alignment risk: Clang overload selection is persisted directly; function IDs
++  are materialized before relation insertion, and negative IDs are rejected.
++- Migration: old databases must be rebuilt because four tables and four emitted
++  expression kinds are new.
++- Database evidence: `evidence/sql-verification.log` records schema shape,
++  representative counts/forms, array shapes, graph edges, reference integrity,
++  runtime virtual guarding, and static global/array/final relationships.
++
++## Verification
++
++- Baseline `scripts/test_all.sh`: PASS, exit 0.
++- ORM generation: 171 model instantiations.
++- LLVM 19 debug build: PASS.
++- Modified full `scripts/test_all.sh`, including P12: PASS, exit 0.
++- P12 SQLite assertions: PASS, 0 warnings.
++- `git diff --check`: PASS.
++
++## Known limitations
++
++- `synthetic_destructor_call`, `expr_reuse`, and compiler-generated call
++  materialization remain deferred until stable generated-expression identity
++  and routine-call materialization specifications exist.
++- The extractor deliberately records only the requested safe main-expression
++  child subset; placement arguments and synthetic calls are not graph children.
+diff --git a/.trellis/tasks/p12-allocation-lifetime/validation.md b/.trellis/tasks/p12-allocation-lifetime/validation.md
+new file mode 100644
+index 0000000..8eb3581
+--- /dev/null
++++ b/.trellis/tasks/p12-allocation-lifetime/validation.md
+@@ -0,0 +1,28 @@
++# P12 Validation Contract
++
++- Schema columns exactly match the CodeQL counterparts.
++- New/delete kind distribution includes plain and array forms.
++- Every allocator/deallocator function reference is positive and resolves to
++  `functions.id`.
++- Allocator forms cover plain and aligned calls.
++- Deallocator forms cover size, alignment, and destroying-delete bits.
++- Plain new types use allocated types; array-new types are outer array types;
++  nested fixed dimensions survive.
++- Initializer edge 1, dynamic extent edge 2, and trivial delete edge 3 exist.
++- Non-trivial/virtual delete operands do not enter the safe child-3 subset.
++- Runtime-selected scalar virtual-destructor deletes do not receive a static
++  `expr_deallocator` row; explicit global, array, and final virtual-type deletes
++  retain their statically selected relation.
++- Dependent new/delete patterns do not produce partial P12 expressions or array
++  types with unresolved element IDs.
++- No synthetic expression kind or deferred lifetime table is added.
++
++Commands:
++
++```bash
++python3 scripts/generate_instantiations.py
++make debug -j 8
++scripts/test_all.sh
++python3 scripts/db_summary.py tests/output/unit-tests-p12-allocation_lifetime_case.db
++sqlite3 tests/output/unit-tests-p12-allocation_lifetime_case.db ".tables"
++```
+diff --git a/docs/datatable-list.txt b/docs/datatable-list.txt
+index ed6a4cf..4a751b9 100644
+--- a/docs/datatable-list.txt
++++ b/docs/datatable-list.txt
+@@ -165,2 +165,2 @@ DONE   161. funbind
+-  162. expr_allocator
+-  163. expr_deallocator
++DONE   162. expr_allocator
++DONE   163. expr_deallocator
+@@ -183,2 +183,2 @@ DONE   178. expr_types
+-  180. new_allocated_type
+-  181. new_array_allocated_type
++DONE   180. new_allocated_type
++DONE   181. new_array_allocated_type
+diff --git a/docs/roadmap.md b/docs/roadmap.md
+index 9d3d4e2..7ec4867 100644
+--- a/docs/roadmap.md
++++ b/docs/roadmap.md
+@@ -245,0 +246,18 @@ P7 先抽取 attribute presence graph，再处理 argument system。presence 与
++- Status: DONE
++- Scope: `CXXNewExpr`/`CXXDeleteExpr` 分别写入 kind 87/129 与 88/128，
++  并新增 CodeQL 对齐的 `new_allocated_type`、
++  `new_array_allocated_type`、`expr_allocator`、`expr_deallocator`。
++- Architecture: allocation semantics 与主图安全子集由 `ExprProcessor`
++  持有；`FunctionProcessor::resolveFunctionReference()` 只提供窄化、按需的
++  稳定函数 ID 解析；`ASTVisitor` 仅注入依赖并派发 new/delete AST 节点。
++- Graph: initializer、动态外层 extent、trivially destructible delete
++  operand 分别使用 child 1、2、3；不合成 allocator/deallocator/destructor
++  call expression。
++- Lifetime closure: `synthetic_destructor_call`、`expr_reuse` 与 delete 合成
++  call 子节点继续 deferred；重新进入条件记录于
++  `.trellis/tasks/p12-allocation-lifetime/research.md`。
++- Validation: `tests/unit-tests/p12/allocation_lifetime_case.cc` 覆盖普通/数组、
++  常量/动态/嵌套数组、placement、over-aligned、类级 operator、
++  sized/aligned/destroying delete 与虚析构 guard，并由 SQLite 断言检查
++  schema、kind、类型、form、引用完整性及主图边。
++- Migration: 新增四张表并开始输出四种 new/delete kind；旧数据库必须重建。
+diff --git a/include/core/ast_visitor.h b/include/core/ast_visitor.h
+index f2811ea..5c53802 100644
+--- a/include/core/ast_visitor.h
++++ b/include/core/ast_visitor.h
+@@ -112,0 +113,2 @@ public:
++  bool VisitCXXNewExpr(const clang::CXXNewExpr *expr);
++  bool VisitCXXDeleteExpr(const clang::CXXDeleteExpr *expr);
+diff --git a/include/core/processor/expr_processor.h b/include/core/processor/expr_processor.h
+index 261db34..c472db2 100644
+--- a/include/core/processor/expr_processor.h
++++ b/include/core/processor/expr_processor.h
+@@ -17,0 +18 @@ class SpecifierProcessor;
++class FunctionProcessor;
+@@ -49,0 +51,2 @@ public:
++  void processCXXNewExpr(const CXXNewExpr *expr);
++  void processCXXDeleteExpr(const CXXDeleteExpr *expr);
+@@ -63 +66,2 @@ public:
+-                SpecifierProcessor *sp = nullptr)
++                SpecifierProcessor *sp = nullptr,
++                FunctionProcessor *fp = nullptr)
+@@ -65 +69 @@ public:
+-        specifier_processor_(sp) {};
++        specifier_processor_(sp), function_processor_(fp) {};
+@@ -99,0 +104,8 @@ private:
++  QualType getArrayNewAllocatedType(const CXXNewExpr *expr) const;
++  int classifyAllocatorForm(const CXXNewExpr *expr) const;
++  int classifyDeallocatorForm(const FunctionDecl *decl) const;
++  bool requiresRuntimeDeallocatorSelection(const CXXDeleteExpr *expr) const;
++  bool hasTriviallyDestructibleDestroyedType(
++      const CXXDeleteExpr *expr) const;
++  void recordAllocator(int exprId, const CXXNewExpr *expr);
++  void recordDeallocator(int exprId, const FunctionDecl *decl);
+@@ -105,0 +118 @@ private:
++  FunctionProcessor *function_processor_ = nullptr;
+diff --git a/include/core/processor/function_processor.h b/include/core/processor/function_processor.h
+index 3907bf7..f1dc2e9 100644
+--- a/include/core/processor/function_processor.h
++++ b/include/core/processor/function_processor.h
+@@ -11,0 +12,4 @@ public:
++  // Resolve and, when necessary, materialize a function declaration referenced
++  // by another semantic subsystem. Always returns a persisted function id or
++  // -1; callers must not persist unresolved references.
++  int resolveFunctionReference(const FunctionDecl *decl);
+diff --git a/include/db/table_defs/expr.h b/include/db/table_defs/expr.h
+index 99f284f..43da895 100644
+--- a/include/db/table_defs/expr.h
++++ b/include/db/table_defs/expr.h
+@@ -61,0 +62,31 @@ inline auto conversionkinds() {
++inline auto expr_allocator() {
++  return make_table(
++      "expr_allocator",
++      make_column("expr", &DbModel::ExprAllocator::expr, primary_key()),
++      make_column("func", &DbModel::ExprAllocator::func),
++      make_column("form", &DbModel::ExprAllocator::form));
++}
++
++inline auto expr_deallocator() {
++  return make_table(
++      "expr_deallocator",
++      make_column("expr", &DbModel::ExprDeallocator::expr, primary_key()),
++      make_column("func", &DbModel::ExprDeallocator::func),
++      make_column("form", &DbModel::ExprDeallocator::form));
++}
++
++inline auto new_allocated_type() {
++  return make_table(
++      "new_allocated_type",
++      make_column("expr", &DbModel::NewAllocatedType::expr, primary_key()),
++      make_column("type_id", &DbModel::NewAllocatedType::type_id));
++}
++
++inline auto new_array_allocated_type() {
++  return make_table(
++      "new_array_allocated_type",
++      make_column("expr", &DbModel::NewArrayAllocatedType::expr,
++                  primary_key()),
++      make_column("type_id", &DbModel::NewArrayAllocatedType::type_id));
++}
++
+diff --git a/include/db/table_init.h b/include/db/table_init.h
+index 33069fc..6aa73df 100644
+--- a/include/db/table_init.h
++++ b/include/db/table_init.h
+@@ -167,0 +168,4 @@ inline auto initStorage(const std::string &path) {
++      ExprTableFn::expr_allocator(),
++      ExprTableFn::expr_deallocator(),
++      ExprTableFn::new_allocated_type(),
++      ExprTableFn::new_array_allocated_type(),
+diff --git a/include/model/db/expr.h b/include/model/db/expr.h
+index e79ab9c..222a42b 100644
+--- a/include/model/db/expr.h
++++ b/include/model/db/expr.h
+@@ -311,0 +312,22 @@ struct ConversionKind {
++struct ExprAllocator {
++  int expr;
++  int func;
++  int form;
++};
++
++struct ExprDeallocator {
++  int expr;
++  int func;
++  int form;
++};
++
++struct NewAllocatedType {
++  int expr;
++  int type_id;
++};
++
++struct NewArrayAllocatedType {
++  int expr;
++  int type_id;
++};
++
+diff --git a/scripts/assert_test_db.py b/scripts/assert_test_db.py
+index 2ef445e..7a13ef6 100755
+--- a/scripts/assert_test_db.py
++++ b/scripts/assert_test_db.py
+@@ -1136,0 +1137,203 @@ def check_p11(audit: Audit) -> None:
++def check_p12(audit: Audit) -> None:
++    expected_counts = {
++        "expr_allocator": 8,
++        "expr_deallocator": 17,
++        "new_allocated_type": 5,
++        "new_array_allocated_type": 3,
++    }
++    for table, expected in expected_counts.items():
++        check_count(audit, table, expected)
++
++    for table, columns in (
++        ("expr_allocator", ["expr", "func", "form"]),
++        ("expr_deallocator", ["expr", "func", "form"]),
++        ("new_allocated_type", ["expr", "type_id"]),
++        ("new_array_allocated_type", ["expr", "type_id"]),
++    ):
++        audit.check_columns(table, columns)
++
++    audit.check(
++        "new/delete kind distribution",
++        """
++        select count(*) from (
++          select kind, count(*) n from exprs
++          where kind in (87,88,128,129) group by kind
++          having (kind=87 and n=5)
++              or (kind=88 and n=8)
++              or (kind=128 and n=2)
++              or (kind=129 and n=3)
++        )
++        """,
++        4,
++    )
++    audit.check(
++        "allocator form distribution",
++        """
++        select count(*) from (
++          select form, count(*) n from expr_allocator group by form
++          having (form=0 and n=7) or (form=1 and n=1)
++        )
++        """,
++        2,
++    )
++    audit.check(
++        "deallocator form coverage",
++        """
++        select count(*) from (
++          select form from expr_deallocator group by form
++          having form in (0,1,2,3,4)
++        )
++        """,
++        5,
++    )
++    audit.check(
++        "allocator/deallocator function reference orphans",
++        """
++        select count(*) from (
++          select func from expr_allocator
++          union all
++          select func from expr_deallocator
++        ) relation
++        left join functions function on function.id=relation.func
++        where relation.func < 0 or function.id is null
++        """,
++        0,
++    )
++    audit.check(
++        "allocation expression reference orphans",
++        """
++        select count(*) from (
++          select expr from expr_allocator
++          union all select expr from expr_deallocator
++          union all select expr from new_allocated_type
++          union all select expr from new_array_allocated_type
++        ) relation
++        left join exprs expression on expression.id=relation.expr
++        where expression.id is null
++        """,
++        0,
++    )
++    audit.check(
++        "allocated type reference orphans",
++        """
++        with all_types(id) as (
++          select id from builtintypes
++          union select id from derivedtypes
++          union select id from usertypes
++          union select id from routinetypes
++        ), allocated(type_id) as (
++          select type_id from new_allocated_type
++          union all select type_id from new_array_allocated_type
++        )
++        select count(*) from allocated
++        left join all_types on all_types.id=allocated.type_id
++        where allocated.type_id < 0 or all_types.id is null
++        """,
++        0,
++    )
++    audit.check(
++        "array allocated outer type shapes",
++        """
++        select count(*) from new_array_allocated_type allocated
++        join derivedtypes type on type.id=allocated.type_id and type.kind=4
++        where type.name in ('int[3]','int[]','int[][4]')
++        """,
++        3,
++    )
++    audit.check(
++        "nested fixed array base resolved",
++        """
++        select count(*) from new_array_allocated_type allocated
++        join derivedtypes outer_type on outer_type.id=allocated.type_id
++        join derivedtypes inner_type on inner_type.id=outer_type.type_id
++        where outer_type.name='int[][4]' and inner_type.name='int[4]'
++        """,
++        1,
++    )
++    audit.check(
++        "array allocated element references resolved",
++        """
++        select count(*) from new_array_allocated_type allocated
++        join derivedtypes outer_type on outer_type.id=allocated.type_id
++        where outer_type.type_id < 0
++        """,
++        0,
++    )
++    audit.check(
++        "initializer child one edges",
++        """
++        select count(*) from exprparents relation
++        join exprs parent on parent.id=relation.parent_id
++        where parent.kind in (87,129) and relation.child_index=1
++        """,
++        2,
++    )
++    audit.check(
++        "dynamic extent child two edges",
++        """
++        select count(*) from exprparents relation
++        join exprs parent on parent.id=relation.parent_id
++        where parent.kind=129 and relation.child_index=2
++        """,
++        2,
++    )
++    audit.check(
++        "trivial delete child three edges",
++        """
++        select count(*) from exprparents relation
++        join exprs parent on parent.id=relation.parent_id
++        where parent.kind in (88,128) and relation.child_index=3
++        """,
++        5,
++    )
++    audit.check(
++        "nontrivial delete child three guard",
++        """
++        select count(*) from exprparents relation
++        join exprs parent on parent.id=relation.parent_id
++        join locations_expr location on location.id=parent.location
++        where location.start_line in (76,77,82,83,84)
++          and relation.child_index=3
++        """,
++        0,
++    )
++    audit.check(
++        "virtual destructor static deallocator guard",
++        """
++        select count(*) from expr_deallocator relation
++        join exprs expression on expression.id=relation.expr
++        join locations_expr location on location.id=expression.location
++        where location.start_line=77
++        """,
++        0,
++    )
++    audit.check(
++        "statically selected virtual-type deallocators",
++        """
++        select count(*) from expr_deallocator relation
++        join exprs expression on expression.id=relation.expr
++        join locations_expr location on location.id=expression.location
++        where location.start_line in (82,83,84)
++        """,
++        3,
++    )
++    audit.check(
++        "dependent allocation expressions deferred",
++        """
++        select count(*) from exprs expression
++        join locations_expr location on location.id=expression.location
++        where expression.kind in (87,88,128,129)
++          and location.start_line in (49,54)
++        """,
++        0,
++    )
++    audit.check(
++        "deferred lifetime tables absent",
++        """
++        select count(*) from pragma_table_list
++        where name in ('synthetic_destructor_call','expr_reuse')
++        """,
++        0,
++    )
++
++
+@@ -1156,0 +1360,2 @@ def run(case: str, database: Path) -> int:
++        elif case == "unit-tests/p12/allocation_lifetime_case":
++            check_p12(audit)
+diff --git a/scripts/test_all.sh b/scripts/test_all.sh
+index a7311b5..51e531c 100755
+--- a/scripts/test_all.sh
++++ b/scripts/test_all.sh
+@@ -40,0 +41 @@ CASES=(
++  "unit-tests/p12/allocation_lifetime_case"
+diff --git a/src/core/ast_visitor.cc b/src/core/ast_visitor.cc
+index e9afa47..c1ddc4e 100644
+--- a/src/core/ast_visitor.cc
++++ b/src/core/ast_visitor.cc
+@@ -70 +70,2 @@ void ASTVisitor::initProcessors() {
+-      context_, pp_, type_processor_.get(), specifier_processor_.get());
++      context_, pp_, type_processor_.get(), specifier_processor_.get(),
++      function_processor_.get());
+@@ -456,0 +458,10 @@ bool ASTVisitor::VisitCallExpr(CallExpr *expr) {
++bool ASTVisitor::VisitCXXNewExpr(const CXXNewExpr *expr) {
++  expr_processor_->processCXXNewExpr(expr);
++  return true;
++}
++
++bool ASTVisitor::VisitCXXDeleteExpr(const CXXDeleteExpr *expr) {
++  expr_processor_->processCXXDeleteExpr(expr);
++  return true;
++}
++
+diff --git a/src/core/processor/expr_processor.cc b/src/core/processor/expr_processor.cc
+index c0b6bfb..e2bd3bf 100644
+--- a/src/core/processor/expr_processor.cc
++++ b/src/core/processor/expr_processor.cc
+@@ -1,0 +2 @@
++#include "core/processor/function_processor.h"
+@@ -13,0 +15 @@
++#include <clang/AST/DeclCXX.h>
+@@ -46,0 +49 @@ bool ExprProcessor::canProcessExprForReference(const Expr *expr) const {
++                   CXXNewExpr, CXXDeleteExpr,
+@@ -89,0 +93,4 @@ int ExprProcessor::getOrProcessExprId(const clang::Expr *expr) {
++  } else if (const auto *newExpr = llvm::dyn_cast<CXXNewExpr>(expr)) {
++    processCXXNewExpr(newExpr);
++  } else if (const auto *deleteExpr = llvm::dyn_cast<CXXDeleteExpr>(expr)) {
++    processCXXDeleteExpr(deleteExpr);
+@@ -106,0 +114,164 @@ int ExprProcessor::getOrProcessExprId(const clang::Expr *expr) {
++QualType
++ExprProcessor::getArrayNewAllocatedType(const CXXNewExpr *expr) const {
++  if (!expr || !ast_context_ || !expr->isArray())
++    return QualType();
++
++  const QualType elementType = expr->getAllocatedType();
++  const auto arraySize = expr->getArraySize();
++  if (arraySize) {
++    if (const auto constantSize =
++            (*arraySize)->getIntegerConstantExpr(*ast_context_)) {
++      return ast_context_->getConstantArrayType(
++          elementType, *constantSize, *arraySize,
++          ArraySizeModifier::Normal, 0);
++    }
++  }
++
++  return ast_context_->getIncompleteArrayType(
++      elementType, ArraySizeModifier::Normal, 0);
++}
++
++int ExprProcessor::classifyAllocatorForm(const CXXNewExpr *expr) const {
++  if (!expr)
++    return 0;
++  if (expr->passAlignment())
++    return 1;
++
++  const FunctionDecl *allocator = expr->getOperatorNew();
++  if (!allocator)
++    return 0;
++  for (const ParmVarDecl *param : allocator->parameters()) {
++    if (param->getType()->isAlignValT() ||
++        param->getType().getCanonicalType()->isAlignValT())
++      return 1;
++  }
++  return 0;
++}
++
++int ExprProcessor::classifyDeallocatorForm(const FunctionDecl *decl) const {
++  if (!decl || !ast_context_)
++    return 0;
++
++  int form = decl->isDestroyingOperatorDelete() ? 4 : 0;
++  for (const ParmVarDecl *param : decl->parameters()) {
++    const QualType paramType = param->getType();
++    if (ast_context_->hasSameType(paramType, ast_context_->getSizeType()))
++      form |= 1;
++    if (paramType->isAlignValT() ||
++        paramType.getCanonicalType()->isAlignValT())
++      form |= 2;
++  }
++  return form;
++}
++
++bool ExprProcessor::requiresRuntimeDeallocatorSelection(
++    const CXXDeleteExpr *expr) const {
++  if (!expr || expr->isGlobalDelete() || expr->isArrayForm())
++    return false;
++  const QualType destroyedType = expr->getDestroyedType();
++  if (destroyedType.isNull())
++    return false;
++  const CXXRecordDecl *record = destroyedType->getAsCXXRecordDecl();
++  if (!record)
++    return false;
++  const CXXRecordDecl *definition = record->getDefinition();
++  if (!definition)
++    return false;
++  record = definition;
++  const CXXDestructorDecl *destructor = record->getDestructor();
++  return destructor && destructor->isVirtual() && !record->isEffectivelyFinal();
++}
++
++bool ExprProcessor::hasTriviallyDestructibleDestroyedType(
++    const CXXDeleteExpr *expr) const {
++  if (!expr)
++    return false;
++  const QualType destroyedType = expr->getDestroyedType();
++  return !destroyedType.isNull() &&
++         destroyedType.isDestructedType() == QualType::DK_none;
++}
++
++void ExprProcessor::recordAllocator(int exprId, const CXXNewExpr *expr) {
++  if (exprId < 0 || !expr || !function_processor_)
++    return;
++  const int functionId =
++      function_processor_->resolveFunctionReference(expr->getOperatorNew());
++  if (functionId < 0)
++    return;
++  DbModel::ExprAllocator allocatorModel = {
++      exprId, functionId, classifyAllocatorForm(expr)};
++  STG.insertClassObj(allocatorModel);
++}
++
++void ExprProcessor::recordDeallocator(int exprId, const FunctionDecl *decl) {
++  if (exprId < 0 || !decl || !function_processor_)
++    return;
++  const int functionId = function_processor_->resolveFunctionReference(decl);
++  if (functionId < 0)
++    return;
++  DbModel::ExprDeallocator deallocatorModel = {
++      exprId, functionId, classifyDeallocatorForm(decl)};
++  STG.insertClassObj(deallocatorModel);
++}
++
++void ExprProcessor::processCXXNewExpr(const CXXNewExpr *expr) {
++  if (!canProcessExprForReference(expr) || findCachedExprId(expr) >= 0)
++    return;
++
++  const ExprKind kind =
++      expr->isArray() ? ExprKind::NEW_ARRAY_EXPR : ExprKind::NEW_EXPR;
++  const int exprId =
++      processBaseExpr(const_cast<CXXNewExpr *>(expr), kind);
++  if (exprId < 0)
++    return;
++
++  QualType allocatedType = expr->getAllocatedType();
++  if (expr->isArray()) {
++    // The reconstructed outer array is not part of the traversed TypeLoc.
++    // Materialize its element first so nested fixed arrays resolve immediately.
++    if (type_processor_)
++      type_processor_->processType(allocatedType.getTypePtr());
++    allocatedType = getArrayNewAllocatedType(expr);
++  }
++  if (!allocatedType.isNull() && type_processor_) {
++    const int typeId = type_processor_->processType(allocatedType.getTypePtr());
++    if (typeId >= 0) {
++      if (expr->isArray()) {
++        DbModel::NewArrayAllocatedType allocatedTypeModel = {exprId, typeId};
++        STG.insertClassObj(allocatedTypeModel);
++      } else {
++        DbModel::NewAllocatedType allocatedTypeModel = {exprId, typeId};
++        STG.insertClassObj(allocatedTypeModel);
++      }
++    }
++  }
++
++  recordAllocator(exprId, expr);
++  if (expr->getOperatorDelete())
++    recordDeallocator(exprId, expr->getOperatorDelete());
++
++  if (const Expr *initializer = expr->getInitializer())
++    recordExprParent(initializer, 1, exprId);
++  if (const auto arraySize = expr->getArraySize();
++      arraySize &&
++      !(*arraySize)->isIntegerConstantExpr(*ast_context_))
++    recordExprParent(*arraySize, 2, exprId);
++}
++
++void ExprProcessor::processCXXDeleteExpr(const CXXDeleteExpr *expr) {
++  if (!canProcessExprForReference(expr) || findCachedExprId(expr) >= 0)
++    return;
++
++  const ExprKind kind = expr->isArrayForm() ? ExprKind::DELETE_ARRAY_EXPR
++                                            : ExprKind::DELETE_EXPR;
++  const int exprId =
++      processBaseExpr(const_cast<CXXDeleteExpr *>(expr), kind);
++  if (exprId < 0)
++    return;
++
++  if (!requiresRuntimeDeallocatorSelection(expr))
++    recordDeallocator(exprId, expr->getOperatorDelete());
++  if (hasTriviallyDestructibleDestroyedType(expr))
++    recordExprParent(expr->getArgument(), 3, exprId);
++}
++
+diff --git a/src/core/processor/function_processor.cc b/src/core/processor/function_processor.cc
+index 6727aae..40402c8 100644
+--- a/src/core/processor/function_processor.cc
++++ b/src/core/processor/function_processor.cc
+@@ -22,0 +23,13 @@ Stmt *getFirstNonCompoundStmt(clang::Stmt *S);
++int FunctionProcessor::resolveFunctionReference(const FunctionDecl *decl) {
++  if (!decl || !ast_context_)
++    return -1;
++
++  const FunctionDecl *canonicalDecl = decl->getCanonicalDecl();
++  const KeyType functionKey =
++      KeyGen::Function::makeKey(canonicalDecl, ast_context_);
++  if (auto cachedId = SEARCH_FUNCTION_CACHE(functionKey))
++    return *cachedId;
++
++  return routerProcess(canonicalDecl);
++}
++
+@@ -336,0 +350,3 @@ int FunctionProcessor::routerProcess(const clang::FunctionDecl *decl) {
++  if (!decl || !ast_context_)
++    return -1;
++
+diff --git a/src/db/storage_facade_instantiations.inc b/src/db/storage_facade_instantiations.inc
+index 6d31543..60cef1a 100644
+--- a/src/db/storage_facade_instantiations.inc
++++ b/src/db/storage_facade_instantiations.inc
+@@ -53,0 +54 @@ template void StorageFacade::insertClassObj<DbModel::Expr&>(DbModel::Expr&);
++template void StorageFacade::insertClassObj<DbModel::ExprAllocator&>(DbModel::ExprAllocator&);
+@@ -54,0 +56 @@ template void StorageFacade::insertClassObj<DbModel::ExprConv&>(DbModel::ExprCon
++template void StorageFacade::insertClassObj<DbModel::ExprDeallocator&>(DbModel::ExprDeallocator&);
+@@ -119,0 +122,2 @@ template void StorageFacade::insertClassObj<DbModel::NamespaceMember&>(DbModel::
++template void StorageFacade::insertClassObj<DbModel::NewAllocatedType&>(DbModel::NewAllocatedType&);
++template void StorageFacade::insertClassObj<DbModel::NewArrayAllocatedType&>(DbModel::NewArrayAllocatedType&);
+diff --git a/tests/unit-tests/p12/allocation_lifetime_case.cc b/tests/unit-tests/p12/allocation_lifetime_case.cc
+new file mode 100644
+index 0000000..3e0666c
+--- /dev/null
++++ b/tests/unit-tests/p12/allocation_lifetime_case.cc
+@@ -0,0 +1,94 @@
++#include <cstddef>
++#include <new>
++
++struct PlainObject {
++  int value;
++};
++
++struct ClassAllocated {
++  static void *operator new(std::size_t);
++  static void operator delete(void *, std::size_t) noexcept;
++  int value;
++};
++
++struct SizedDeleted {
++  static void operator delete(void *, std::size_t) noexcept;
++  int value;
++};
++
++struct alignas(64) AlignedDeleted {
++  static void operator delete(void *, std::align_val_t) noexcept;
++  int value;
++};
++
++struct alignas(64) SizedAlignedDeleted {
++  static void operator delete(void *, std::size_t,
++                              std::align_val_t) noexcept;
++  int value;
++};
++
++struct DestroyingDeleted {
++  static void operator delete(DestroyingDeleted *,
++                              std::destroying_delete_t) noexcept;
++  ~DestroyingDeleted();
++};
++
++struct VirtualDeleted {
++  static void operator delete(void *) noexcept;
++  static void operator delete[](void *) noexcept;
++  virtual ~VirtualDeleted();
++};
++
++struct FinalVirtualDeleted final {
++  static void operator delete(void *) noexcept;
++  virtual ~FinalVirtualDeleted();
++};
++
++template <class T>
++T *dependent_new_array(int extent) {
++  return new T[extent];
++}
++
++template <class T>
++void dependent_delete(T *pointer) {
++  delete pointer;
++}
++
++void p12_allocation_lifetime(
++    int extent, void *placement, int *plain_pointer, int *array_pointer,
++    SizedDeleted *sized_pointer, AlignedDeleted *aligned_pointer,
++    SizedAlignedDeleted *sized_aligned_pointer,
++    DestroyingDeleted *destroying_pointer, VirtualDeleted *virtual_pointer) {
++  auto *plain_new = new PlainObject;
++  auto *initialized_new = new int(7);
++  auto *constant_array = new int[3];
++  auto *dynamic_array = new int[extent];
++  auto *nested_array = new int[extent][4];
++  auto *placement_new = new (placement) int(9);
++  auto *over_aligned_new = new AlignedDeleted;
++  auto *class_new = new ClassAllocated;
++
++  delete plain_pointer;
++  delete[] array_pointer;
++  delete sized_pointer;
++  delete aligned_pointer;
++  delete sized_aligned_pointer;
++  delete destroying_pointer;
++  delete virtual_pointer;
++
++  VirtualDeleted *global_virtual_pointer = virtual_pointer;
++  VirtualDeleted *virtual_array_pointer = virtual_pointer;
++  FinalVirtualDeleted *final_virtual_pointer = nullptr;
++  ::delete global_virtual_pointer;
++  delete[] virtual_array_pointer;
++  delete final_virtual_pointer;
++
++  (void)plain_new;
++  (void)initialized_new;
++  (void)constant_array;
++  (void)dynamic_array;
++  (void)nested_array;
++  (void)placement_new;
++  (void)over_aligned_new;
++  (void)class_new;
++}

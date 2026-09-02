@@ -20,6 +20,19 @@
 
 Stmt *getFirstNonCompoundStmt(clang::Stmt *S);
 
+int FunctionProcessor::resolveFunctionReference(const FunctionDecl *decl) {
+  if (!decl || !ast_context_)
+    return -1;
+
+  const FunctionDecl *canonicalDecl = decl->getCanonicalDecl();
+  const KeyType functionKey =
+      KeyGen::Function::makeKey(canonicalDecl, ast_context_);
+  if (auto cachedId = SEARCH_FUNCTION_CACHE(functionKey))
+    return *cachedId;
+
+  return routerProcess(canonicalDecl);
+}
+
 // Create base function struct and return id
 void FunctionProcessor::handleBaseFunc(const FunctionDecl *decl,
                                        const FuncType type) {
@@ -334,6 +347,9 @@ void FunctionProcessor::recordCoroutine(const FunctionDecl *FD) {
 // Router to process functions of @operator @builtin_function
 // @user_defined_function, @normal_function
 int FunctionProcessor::routerProcess(const clang::FunctionDecl *decl) {
+  if (!decl || !ast_context_)
+    return -1;
+
   auto kind = decl->getKind();
   // Return first, will be processed by other functions
   if (kind == Decl::CXXConstructor || kind == Decl::CXXDestructor ||

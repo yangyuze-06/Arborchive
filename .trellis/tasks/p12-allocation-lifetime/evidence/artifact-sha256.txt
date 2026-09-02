@@ -1,0 +1,4 @@
+eaff8bc0ece67d6e9f4a811a3e65ec673af305f3df9b089cec5799ed3bca6a4a  .trellis/tasks/p12-allocation-lifetime/evidence/MODIFIED_FILE
+c7f737090dacd15b290edaa2f0f27211d3a79b40b679024ed51078e70d885f69  .trellis/tasks/p12-allocation-lifetime/evidence/DIFF_FILE
+5648a29a77339a36ba1fb9eebc6e7080075408bc509144d4228a51e1efb6d86c  .trellis/tasks/p12-allocation-lifetime/evidence/VERIFICATION.txt
+c3a44b6e2d37a7e98ffdf3e58a29cc1e12ecade9b9e48716a9aa79135416301a  .trellis/tasks/p12-allocation-lifetime/evidence/ROLLBACK.sh

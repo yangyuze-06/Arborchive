@@ -110,6 +110,8 @@ public:
   // Expr Family
   bool VisitDeclRefExpr(clang::DeclRefExpr *expr);
   bool VisitCallExpr(clang::CallExpr *expr);
+  bool VisitCXXNewExpr(const clang::CXXNewExpr *expr);
+  bool VisitCXXDeleteExpr(const clang::CXXDeleteExpr *expr);
   bool VisitUnaryOperator(const clang::UnaryOperator *op);
   bool VisitBinaryOperator(const clang::BinaryOperator *op);
   bool VisitConditionalOperator(const clang::ConditionalOperator *op);

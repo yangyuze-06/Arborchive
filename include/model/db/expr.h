@@ -309,6 +309,28 @@ struct ConversionKind {
   int kind;
 };
 
+struct ExprAllocator {
+  int expr;
+  int func;
+  int form;
+};
+
+struct ExprDeallocator {
+  int expr;
+  int func;
+  int form;
+};
+
+struct NewAllocatedType {
+  int expr;
+  int type_id;
+};
+
+struct NewArrayAllocatedType {
+  int expr;
+  int type_id;
+};
+
 struct FunBind {
   int expr;
   int fun;
