@@ -25,6 +25,40 @@ inline auto exprparents() {
       make_column("parent_id", &DbModel::ExprParent::parent_id));
 }
 
+inline auto exprconv() {
+  return make_table(
+      "exprconv",
+      make_column("converted", &DbModel::ExprConv::converted),
+      make_column("conversion", &DbModel::ExprConv::conversion, primary_key()));
+}
+
+inline auto expr_types() {
+  return make_table(
+      "expr_types",
+      make_column("id", &DbModel::ExprType::id),
+      make_column("typeid", &DbModel::ExprType::typeid_),
+      make_column("value_category", &DbModel::ExprType::value_category));
+}
+
+inline auto expr_isload() {
+  return make_table(
+      "expr_isload",
+      make_column("expr_id", &DbModel::ExprIsLoad::expr_id, primary_key()));
+}
+
+inline auto compgenerated() {
+  return make_table(
+      "compgenerated",
+      make_column("id", &DbModel::CompGenerated::id, primary_key()));
+}
+
+inline auto conversionkinds() {
+  return make_table(
+      "conversionkinds",
+      make_column("expr_id", &DbModel::ConversionKind::expr_id, primary_key()),
+      make_column("kind", &DbModel::ConversionKind::kind));
+}
+
 inline auto funbind() {
   return make_table(
       "funbind",
